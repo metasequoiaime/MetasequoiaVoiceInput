@@ -2,6 +2,13 @@
 #include <string>
 #include <cstdio>
 #include <memory>
+#include <deque>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <chrono>
+#include <atomic>
+#include <stdexcept>
 #include "silero_vad.h"
 #include "audio_capture.h"
 #include "whisper_worker.h"
@@ -20,6 +27,73 @@ enum class SttProvider
 
 SttProvider g_stt_provider = SttProvider::CloudSiliconFlow; // Default to Cloud for testing
 std::string g_cloud_token;
+
+namespace
+{
+constexpr UINT WM_APP_RALT_TOGGLE = WM_APP + 1;
+constexpr UINT WM_APP_EXIT = WM_APP + 2;
+
+std::atomic<bool> g_ralt_pressed{false};
+std::atomic<bool> g_space_pressed{false};
+DWORD g_main_thread_id = 0;
+
+LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode == HC_ACTION)
+    {
+        const auto *kb = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
+        if (kb != nullptr && kb->vkCode == VK_RMENU)
+        {
+            const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+            const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+
+            if (is_key_down)
+            {
+                bool expected = false;
+                if (g_ralt_pressed.compare_exchange_strong(expected, true))
+                {
+                }
+            }
+            else if (is_key_up)
+            {
+                bool expected = true;
+                if (g_ralt_pressed.compare_exchange_strong(expected, false))
+                {
+                }
+            }
+            return 1; // 吞下这个按键，防止 Chrome 这样的应用会触发别的行为
+        }
+        else if (kb != nullptr && kb->vkCode == VK_SPACE)
+        {
+            const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+            const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+
+            if (is_key_down)
+            {
+                bool expected = false;
+                if (g_space_pressed.compare_exchange_strong(expected, true))
+                {
+                    if (g_ralt_pressed.load())
+                    {
+                        PostThreadMessage(g_main_thread_id, WM_APP_RALT_TOGGLE, 0, 0);
+                        return 1; // 吞下组合键中的 Space，避免输入空格
+                    }
+                }
+            }
+            else if (is_key_up)
+            {
+                bool expected = true;
+                g_space_pressed.compare_exchange_strong(expected, false);
+                if (g_ralt_pressed.load())
+                {
+                    return 1; // RAlt 按住时吞掉 Space 抬起
+                }
+            }
+        }
+    }
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+} // namespace
 
 int main()
 {
@@ -105,7 +179,7 @@ int main()
             }
         });
 
-        audio.start([&](const float *data, size_t count) {
+        auto audio_callback = [&](const float *data, size_t count) {
             try
             {
                 vad.push_audio(data, count);
@@ -129,15 +203,82 @@ int main()
                 printf("[CALLBACK ERROR] Unknown exception\n");
                 fflush(stdout);
             }
+        };
+
+        g_main_thread_id = GetCurrentThreadId();
+
+        MSG init_msg{};
+        PeekMessage(&init_msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+        HHOOK keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, GetModuleHandleW(nullptr), 0);
+        if (keyboard_hook == nullptr)
+        {
+            throw std::runtime_error(fmt::format("SetWindowsHookExW failed: {}", GetLastError()));
+        }
+
+        std::thread exit_thread([&]() {
+            std::cin.get();
+            PostThreadMessage(g_main_thread_id, WM_APP_EXIT, 0, 0);
         });
 
-        printf("Application is running. Press ENTER to stop and exit.\n");
+        bool audio_started = false;
+
+        printf("Press RAlt + Space to toggle recording. Press ENTER to stop and exit.\n");
         fflush(stdout);
-        std::cin.get();
+
+        MSG msg{};
+        bool should_exit = false;
+        while (!should_exit && GetMessage(&msg, nullptr, 0, 0) > 0)
+        {
+            switch (msg.message)
+            {
+            case WM_APP_RALT_TOGGLE: {
+                if (!audio_started)
+                {
+                    if (!audio.start(audio_callback))
+                    {
+                        printf("[AUDIO] Failed to start capture.\n");
+                        fflush(stdout);
+                    }
+                    else
+                    {
+                        audio_started = true;
+                        printf("[AUDIO] Started.\n");
+                        fflush(stdout);
+                    }
+                }
+                else
+                {
+                    audio.stop();
+                    audio_started = false;
+                    printf("[AUDIO] Stopped.\n");
+                    fflush(stdout);
+                }
+                break;
+            }
+            case WM_APP_EXIT:
+                should_exit = true;
+                break;
+            default:
+                break;
+            }
+        }
 
         printf("Stopping...\n");
         fflush(stdout);
-        audio.stop();
+
+        if (audio_started)
+        {
+            audio.stop();
+        }
+
+        UnhookWindowsHookEx(keyboard_hook);
+
+        if (exit_thread.joinable())
+        {
+            exit_thread.join();
+        }
+
         // 通知 stt 线程停止
         stt_stop = true;
         stt_cv.notify_one();
