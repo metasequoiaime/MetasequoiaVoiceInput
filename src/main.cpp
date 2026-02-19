@@ -33,37 +33,54 @@ namespace
 constexpr UINT WM_APP_RALT_TOGGLE = WM_APP + 1;
 constexpr UINT WM_APP_EXIT = WM_APP + 2;
 
-std::atomic<bool> g_ralt_pressed{false};
-std::atomic<bool> g_space_pressed{false};
+std::atomic<bool> g_lctrl_pressed{false};
+std::atomic<bool> g_rctrl_pressed{false};
+std::atomic<bool> g_f9_pressed{false};
 DWORD g_main_thread_id = 0;
+
+bool is_ctrl_pressed()
+{
+    return g_lctrl_pressed.load() || g_rctrl_pressed.load();
+}
 
 LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
 {
     if (nCode == HC_ACTION)
     {
         const auto *kb = reinterpret_cast<KBDLLHOOKSTRUCT *>(lParam);
-        if (kb != nullptr && kb->vkCode == VK_RMENU)
+        if (kb != nullptr && (kb->vkCode == VK_LCONTROL || kb->vkCode == VK_RCONTROL))
         {
             const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
             const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
 
             if (is_key_down)
             {
-                bool expected = false;
-                if (g_ralt_pressed.compare_exchange_strong(expected, true))
+                if (kb->vkCode == VK_LCONTROL)
                 {
+                    bool expected = false;
+                    g_lctrl_pressed.compare_exchange_strong(expected, true);
+                }
+                else
+                {
+                    bool expected = false;
+                    g_rctrl_pressed.compare_exchange_strong(expected, true);
                 }
             }
             else if (is_key_up)
             {
-                bool expected = true;
-                if (g_ralt_pressed.compare_exchange_strong(expected, false))
+                if (kb->vkCode == VK_LCONTROL)
                 {
+                    bool expected = true;
+                    g_lctrl_pressed.compare_exchange_strong(expected, false);
+                }
+                else
+                {
+                    bool expected = true;
+                    g_rctrl_pressed.compare_exchange_strong(expected, false);
                 }
             }
-            return 1; // 吞下这个按键，防止 Chrome 这样的应用会触发别的行为
         }
-        else if (kb != nullptr && kb->vkCode == VK_SPACE)
+        else if (kb != nullptr && kb->vkCode == VK_F9)
         {
             const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
             const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
@@ -71,22 +88,22 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
             if (is_key_down)
             {
                 bool expected = false;
-                if (g_space_pressed.compare_exchange_strong(expected, true))
+                if (g_f9_pressed.compare_exchange_strong(expected, true))
                 {
-                    if (g_ralt_pressed.load())
+                    if (is_ctrl_pressed())
                     {
                         PostThreadMessage(g_main_thread_id, WM_APP_RALT_TOGGLE, 0, 0);
-                        return 1; // 吞下组合键中的 Space，避免输入空格
+                        return 1; // 吞下组合键中的 F9
                     }
                 }
             }
             else if (is_key_up)
             {
                 bool expected = true;
-                g_space_pressed.compare_exchange_strong(expected, false);
-                if (g_ralt_pressed.load())
+                g_f9_pressed.compare_exchange_strong(expected, false);
+                if (is_ctrl_pressed())
                 {
-                    return 1; // RAlt 按住时吞掉 Space 抬起
+                    return 1; // Ctrl 按住时吞掉 F9 抬起
                 }
             }
         }
@@ -223,7 +240,7 @@ int main()
 
         bool audio_started = false;
 
-        printf("Press RAlt + Space to toggle recording. Press ENTER to stop and exit.\n");
+        printf("Press Ctrl + F9 to toggle recording. Press ENTER to stop and exit.\n");
         fflush(stdout);
 
         MSG msg{};
