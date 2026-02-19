@@ -9,6 +9,7 @@
 #include <chrono>
 #include <atomic>
 #include <stdexcept>
+#include <vector>
 #include "silero_vad.h"
 #include "audio_capture.h"
 #include "whisper_worker.h"
@@ -30,9 +31,14 @@ std::string g_cloud_token;
 
 namespace
 {
-constexpr UINT WM_APP_RALT_TOGGLE = WM_APP + 1;
-constexpr UINT WM_APP_EXIT = WM_APP + 2;
+constexpr UINT WM_APP_TOGGLE_RECORD = WM_APP + 1; // Ctrl + F9
+constexpr UINT WM_APP_RALT_RECORD_START = WM_APP + 2;
+constexpr UINT WM_APP_RALT_RECORD_STOP = WM_APP + 3;
+constexpr UINT WM_APP_EXIT = WM_APP + 4;
+constexpr int k_ralt_min_record_ms = 250;
+constexpr int k_sample_rate = 16000;
 
+std::atomic<bool> g_ralt_pressed{false};
 std::atomic<bool> g_lctrl_pressed{false};
 std::atomic<bool> g_rctrl_pressed{false};
 std::atomic<bool> g_f9_pressed{false};
@@ -92,7 +98,7 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
                 {
                     if (is_ctrl_pressed())
                     {
-                        PostThreadMessage(g_main_thread_id, WM_APP_RALT_TOGGLE, 0, 0);
+                        PostThreadMessage(g_main_thread_id, WM_APP_TOGGLE_RECORD, 0, 0);
                         return 1; // 吞下组合键中的 F9
                     }
                 }
@@ -105,6 +111,30 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
                 {
                     return 1; // Ctrl 按住时吞掉 F9 抬起
                 }
+            }
+        }
+        else if (kb != nullptr && kb->vkCode == VK_RMENU)
+        {
+            const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+            const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+
+            if (is_key_down)
+            {
+                bool expected = false;
+                if (g_ralt_pressed.compare_exchange_strong(expected, true))
+                {
+                    PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_START, 0, 0);
+                }
+                return 1; // 吞下 RAlt，避免前台应用触发菜单行为
+            }
+            else if (is_key_up)
+            {
+                bool expected = true;
+                if (g_ralt_pressed.compare_exchange_strong(expected, false))
+                {
+                    PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_STOP, 0, 0);
+                }
+                return 1;
             }
         }
     }
@@ -166,6 +196,8 @@ int main()
         std::condition_variable stt_cv;
         std::deque<SpeechSegment> stt_queue;
         std::atomic<bool> stt_stop = false;
+        std::mutex record_mutex;
+        std::vector<float> recorded_samples;
         std::thread stt_thread([&]() {
             while (!stt_stop)
             {
@@ -196,7 +228,7 @@ int main()
             }
         });
 
-        auto audio_callback = [&](const float *data, size_t count) {
+        auto audio_callback_vad = [&](const float *data, size_t count) {
             try
             {
                 vad.push_audio(data, count);
@@ -209,6 +241,24 @@ int main()
                     }
                     stt_cv.notify_one();
                 }
+            }
+            catch (const std::exception &e)
+            {
+                printf("[CALLBACK ERROR] %s\n", e.what());
+                fflush(stdout);
+            }
+            catch (...)
+            {
+                printf("[CALLBACK ERROR] Unknown exception\n");
+                fflush(stdout);
+            }
+        };
+
+        auto audio_callback_raw = [&](const float *data, size_t count) {
+            try
+            {
+                std::lock_guard<std::mutex> lock(record_mutex);
+                recorded_samples.insert(recorded_samples.end(), data, data + count);
             }
             catch (const std::exception &e)
             {
@@ -239,8 +289,13 @@ int main()
         });
 
         bool audio_started = false;
+        bool toggle_mode_active = false;
+        bool ralt_mode_active = false;
+        auto ralt_record_start_time = std::chrono::steady_clock::now();
 
-        printf("Press Ctrl + F9 to toggle recording. Press ENTER to stop and exit.\n");
+        printf("Press Ctrl + F9 to toggle VAD recording.\n");
+        printf("Hold RAlt to record one segment. Release RAlt to transcribe and send text.\n");
+        printf("Press ENTER to stop and exit.\n");
         fflush(stdout);
 
         MSG msg{};
@@ -249,10 +304,17 @@ int main()
         {
             switch (msg.message)
             {
-            case WM_APP_RALT_TOGGLE: {
-                if (!audio_started)
+            case WM_APP_TOGGLE_RECORD: {
+                if (ralt_mode_active)
                 {
-                    if (!audio.start(audio_callback))
+                    printf("[AUDIO] Busy: RAlt hold-to-record is active.\n");
+                    fflush(stdout);
+                    break;
+                }
+
+                if (!toggle_mode_active)
+                {
+                    if (!audio.start(audio_callback_vad))
                     {
                         printf("[AUDIO] Failed to start capture.\n");
                         fflush(stdout);
@@ -260,7 +322,8 @@ int main()
                     else
                     {
                         audio_started = true;
-                        printf("[AUDIO] Started.\n");
+                        toggle_mode_active = true;
+                        printf("[AUDIO] Started (Ctrl+F9 toggle mode).\n");
                         fflush(stdout);
                     }
                 }
@@ -268,7 +331,87 @@ int main()
                 {
                     audio.stop();
                     audio_started = false;
-                    printf("[AUDIO] Stopped.\n");
+                    toggle_mode_active = false;
+                    printf("[AUDIO] Stopped (Ctrl+F9 toggle mode).\n");
+                    fflush(stdout);
+                }
+                break;
+            }
+            case WM_APP_RALT_RECORD_START: {
+                if (toggle_mode_active)
+                {
+                    printf("[AUDIO] Busy: Ctrl+F9 toggle mode is active.\n");
+                    fflush(stdout);
+                    break;
+                }
+
+                if (ralt_mode_active || audio_started)
+                {
+                    break;
+                }
+
+                {
+                    std::lock_guard<std::mutex> lock(record_mutex);
+                    recorded_samples.clear();
+                }
+
+                if (!audio.start(audio_callback_raw))
+                {
+                    printf("[AUDIO] Failed to start capture.\n");
+                    fflush(stdout);
+                }
+                else
+                {
+                    audio_started = true;
+                    ralt_mode_active = true;
+                    ralt_record_start_time = std::chrono::steady_clock::now();
+                    printf("[AUDIO] Recording (RAlt hold mode)...\n");
+                    fflush(stdout);
+                }
+                break;
+            }
+            case WM_APP_RALT_RECORD_STOP: {
+                if (!ralt_mode_active)
+                {
+                    break;
+                }
+
+                audio.stop();
+                audio_started = false;
+                ralt_mode_active = false;
+                printf("[AUDIO] Stopped (RAlt hold mode).\n");
+                fflush(stdout);
+
+                SpeechSegment segment;
+                segment.sample_rate = k_sample_rate;
+                {
+                    std::lock_guard<std::mutex> lock(record_mutex);
+                    segment.samples = std::move(recorded_samples);
+                    recorded_samples.clear();
+                }
+
+                const auto elapsed = std::chrono::steady_clock::now() - ralt_record_start_time;
+                const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+                const size_t min_samples = static_cast<size_t>((k_sample_rate * k_ralt_min_record_ms) / 1000);
+
+                if (elapsed_ms < k_ralt_min_record_ms || segment.samples.size() < min_samples)
+                {
+                    printf("[AUDIO] Ignored short RAlt recording (%lldms, %zu samples).\n", elapsed_ms, segment.samples.size());
+                    fflush(stdout);
+                    break;
+                }
+
+                if (!segment.samples.empty())
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(stt_mutex);
+                        stt_queue.push_back(std::move(segment));
+                    }
+                    stt_cv.notify_one();
+                }
+                else
+                {
+                    printf("[AUDIO] No audio captured.\n");
                     fflush(stdout);
                 }
                 break;
