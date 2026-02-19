@@ -35,6 +35,7 @@ constexpr UINT WM_APP_TOGGLE_RECORD = WM_APP + 1; // Ctrl + F9
 constexpr UINT WM_APP_RALT_RECORD_START = WM_APP + 2;
 constexpr UINT WM_APP_RALT_RECORD_STOP = WM_APP + 3;
 constexpr UINT WM_APP_EXIT = WM_APP + 4;
+constexpr UINT WM_APP_RALT_RECORD_LOCK = WM_APP + 5;
 constexpr int k_ralt_min_record_ms = 250;
 constexpr int k_sample_rate = 16000;
 
@@ -42,6 +43,7 @@ std::atomic<bool> g_ralt_pressed{false};
 std::atomic<bool> g_lctrl_pressed{false};
 std::atomic<bool> g_rctrl_pressed{false};
 std::atomic<bool> g_f9_pressed{false};
+std::atomic<bool> g_ralt_lock_mode{false};
 DWORD g_main_thread_id = 0;
 
 bool is_ctrl_pressed()
@@ -123,7 +125,14 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
                 bool expected = false;
                 if (g_ralt_pressed.compare_exchange_strong(expected, true))
                 {
-                    PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_START, 0, 0);
+                    if (g_ralt_lock_mode.load())
+                    {
+                        PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_STOP, 0, 0);
+                    }
+                    else
+                    {
+                        PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_START, 0, 0);
+                    }
                 }
                 return 1; // 吞下 RAlt，避免前台应用触发菜单行为
             }
@@ -132,8 +141,30 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
                 bool expected = true;
                 if (g_ralt_pressed.compare_exchange_strong(expected, false))
                 {
-                    PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_STOP, 0, 0);
+                    if (!g_ralt_lock_mode.load())
+                    {
+                        PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_STOP, 0, 0);
+                    }
                 }
+                return 1;
+            }
+        }
+        else if (kb != nullptr && kb->vkCode == VK_SPACE)
+        {
+            const bool is_key_down = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
+            const bool is_key_up = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+
+            if (is_key_down && g_ralt_pressed.load())
+            {
+                if (!g_ralt_lock_mode.load())
+                {
+                    PostThreadMessage(g_main_thread_id, WM_APP_RALT_RECORD_LOCK, 0, 0);
+                }
+                return 1; // RAlt 组合状态下吞掉 Space，避免输入空格
+            }
+
+            if (is_key_up && g_ralt_pressed.load())
+            {
                 return 1;
             }
         }
@@ -291,10 +322,12 @@ int main()
         bool audio_started = false;
         bool toggle_mode_active = false;
         bool ralt_mode_active = false;
+        bool ralt_lock_active = false;
         auto ralt_record_start_time = std::chrono::steady_clock::now();
 
         printf("Press Ctrl + F9 to toggle VAD recording.\n");
         printf("Hold RAlt to record one segment. Release RAlt to transcribe and send text.\n");
+        printf("While holding RAlt, press Space to lock recording. Press RAlt again to stop and transcribe.\n");
         printf("Press ENTER to stop and exit.\n");
         fflush(stdout);
 
@@ -364,10 +397,24 @@ int main()
                 {
                     audio_started = true;
                     ralt_mode_active = true;
+                    ralt_lock_active = false;
+                    g_ralt_lock_mode = false;
                     ralt_record_start_time = std::chrono::steady_clock::now();
                     printf("[AUDIO] Recording (RAlt hold mode)...\n");
                     fflush(stdout);
                 }
+                break;
+            }
+            case WM_APP_RALT_RECORD_LOCK: {
+                if (!ralt_mode_active || ralt_lock_active)
+                {
+                    break;
+                }
+
+                ralt_lock_active = true;
+                g_ralt_lock_mode = true;
+                printf("[AUDIO] Locked recording (RAlt+Space). Press RAlt again to stop.\n");
+                fflush(stdout);
                 break;
             }
             case WM_APP_RALT_RECORD_STOP: {
@@ -376,10 +423,20 @@ int main()
                     break;
                 }
 
+                const bool was_locked = ralt_lock_active;
                 audio.stop();
                 audio_started = false;
                 ralt_mode_active = false;
-                printf("[AUDIO] Stopped (RAlt hold mode).\n");
+                ralt_lock_active = false;
+                g_ralt_lock_mode = false;
+                if (was_locked)
+                {
+                    printf("[AUDIO] Stopped (RAlt lock mode).\n");
+                }
+                else
+                {
+                    printf("[AUDIO] Stopped (RAlt hold mode).\n");
+                }
                 fflush(stdout);
 
                 SpeechSegment segment;
