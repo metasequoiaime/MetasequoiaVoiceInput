@@ -10,12 +10,15 @@
 #include <atomic>
 #include <stdexcept>
 #include <vector>
+#include <cmath>
+#include <algorithm>
 #include "silero_vad.h"
 #include "audio_capture.h"
 #include "whisper_worker.h"
 #include "cloud_stt_worker.h"
 #include "send_input.h"
 #include "mvi_utils.h"
+#include "wave_overlay.h"
 #include <fmt/format.h>
 #include <windows.h>
 
@@ -177,6 +180,8 @@ int main()
 {
     // g_stt_provider = SttProvider::LocalWhisper;
 
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     // Set console code page to UTF-8 so console can display UTF-8 characters correctly
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
@@ -220,6 +225,12 @@ int main()
         printf("[INIT] Initializing Audio...\n");
         fflush(stdout);
         AudioCapture audio;
+        WaveOverlay wave_overlay;
+        if (!wave_overlay.init(GetModuleHandleW(nullptr)))
+        {
+            throw std::runtime_error("WaveOverlay init failed");
+        }
+        wave_overlay.show();
         //
         // STT queue + thread, 把耗时的操作放在这个线程里，避免在 audio callback 里做耗时操作导致丢音频
         //
@@ -262,6 +273,14 @@ int main()
         auto audio_callback_vad = [&](const float *data, size_t count) {
             try
             {
+                double sum_sq = 0.0;
+                for (size_t i = 0; i < count; ++i)
+                {
+                    sum_sq += data[i] * data[i];
+                }
+                const float rms = count > 0 ? static_cast<float>(std::sqrt(sum_sq / static_cast<double>(count))) : 0.0f;
+                wave_overlay.set_input_level(std::min(1.0f, rms * 8.0f));
+
                 vad.push_audio(data, count);
                 while (vad.has_segment())
                 {
@@ -288,6 +307,14 @@ int main()
         auto audio_callback_raw = [&](const float *data, size_t count) {
             try
             {
+                double sum_sq = 0.0;
+                for (size_t i = 0; i < count; ++i)
+                {
+                    sum_sq += data[i] * data[i];
+                }
+                const float rms = count > 0 ? static_cast<float>(std::sqrt(sum_sq / static_cast<double>(count))) : 0.0f;
+                wave_overlay.set_input_level(std::min(1.0f, rms * 8.0f));
+
                 std::lock_guard<std::mutex> lock(record_mutex);
                 recorded_samples.insert(recorded_samples.end(), data, data + count);
             }
@@ -356,6 +383,7 @@ int main()
                     {
                         audio_started = true;
                         toggle_mode_active = true;
+                        wave_overlay.set_listening(true);
                         printf("[AUDIO] Started (Ctrl+F9 toggle mode).\n");
                         fflush(stdout);
                     }
@@ -365,6 +393,8 @@ int main()
                     audio.stop();
                     audio_started = false;
                     toggle_mode_active = false;
+                    wave_overlay.set_listening(false);
+                    wave_overlay.set_input_level(0.0f);
                     printf("[AUDIO] Stopped (Ctrl+F9 toggle mode).\n");
                     fflush(stdout);
                 }
@@ -399,6 +429,7 @@ int main()
                     ralt_mode_active = true;
                     ralt_lock_active = false;
                     g_ralt_lock_mode = false;
+                    wave_overlay.set_listening(true);
                     ralt_record_start_time = std::chrono::steady_clock::now();
                     printf("[AUDIO] Recording (RAlt hold mode)...\n");
                     fflush(stdout);
@@ -429,6 +460,8 @@ int main()
                 ralt_mode_active = false;
                 ralt_lock_active = false;
                 g_ralt_lock_mode = false;
+                wave_overlay.set_listening(false);
+                wave_overlay.set_input_level(0.0f);
                 if (was_locked)
                 {
                     printf("[AUDIO] Stopped (RAlt lock mode).\n");
@@ -477,6 +510,8 @@ int main()
                 should_exit = true;
                 break;
             default:
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
                 break;
             }
         }
@@ -487,9 +522,12 @@ int main()
         if (audio_started)
         {
             audio.stop();
+            wave_overlay.set_listening(false);
+            wave_overlay.set_input_level(0.0f);
         }
 
         UnhookWindowsHookEx(keyboard_hook);
+        wave_overlay.shutdown();
 
         if (exit_thread.joinable())
         {

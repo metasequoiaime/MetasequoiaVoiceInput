@@ -2,6 +2,7 @@ CompileFlags:
   Add: [
       -DUNICODE,
       -D_UNICODE,
+      -DNOMINMAX,
       -DFANY_DEBUG,
       "-std=c++17",
       "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/src",

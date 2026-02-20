@@ -49,6 +49,8 @@ set(SOURCE_FILES
     "src/stt_service.h"
     "src/vad.cpp"
     "src/vad.h"
+    "src/wave_overlay.cpp"
+    "src/wave_overlay.h"
     "src/wav_writer.h"
     "src/whisper_worker.cpp"
     "src/whisper_worker.h"
@@ -65,6 +67,7 @@ target_link_libraries(${MY_EXECUTABLE_NAME}
     onnxruntime::onnxruntime
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    d2d1
     User32
 )
 
