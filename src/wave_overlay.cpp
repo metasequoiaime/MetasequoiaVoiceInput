@@ -100,13 +100,6 @@ bool WaveOverlay::init(HINSTANCE instance)
     MARGINS mar = {-1};
     DwmExtendFrameIntoClientArea(hwnd_, &mar);
 
-    // 窗口放置到任务栏上方一点点，并且居中
-    RECT rc = mvi_utils::GetMonitorCoordinates();
-    const int taskbar_height = mvi_utils::GetTaskbarHeight();
-    const int x = (rc.right + rc.left) / 2 - kWidth / 2;
-    const int y = rc.bottom - taskbar_height - kHeight - 10; // 10 是额外的偏移，让窗口离任务栏更远一些
-    SetWindowPos(hwnd_, HWND_TOPMOST, x, y, kWidth, kHeight, SWP_NOACTIVATE);
-
     return true;
 }
 
@@ -126,6 +119,13 @@ void WaveOverlay::show()
 {
     if (hwnd_)
     {
+        // 每次显示时根据当前显示器重新定位
+        RECT rc = mvi_utils::GetMonitorCoordinates();
+        const int taskbar_height = mvi_utils::GetTaskbarHeight();
+        const int x = (rc.right + rc.left) / 2 - kWidth / 2;
+        const int y = rc.bottom - taskbar_height - kHeight - 10;
+        SetWindowPos(hwnd_, HWND_TOPMOST, x, y, kWidth, kHeight, SWP_NOACTIVATE);
+
         ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
         UpdateWindow(hwnd_);
     }

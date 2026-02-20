@@ -230,7 +230,6 @@ int main()
         {
             throw std::runtime_error("WaveOverlay init failed");
         }
-        wave_overlay.show();
         //
         // STT queue + thread, 把耗时的操作放在这个线程里，避免在 audio callback 里做耗时操作导致丢音频
         //
@@ -383,6 +382,7 @@ int main()
                     {
                         audio_started = true;
                         toggle_mode_active = true;
+                        wave_overlay.show();
                         wave_overlay.set_listening(true);
                         printf("[AUDIO] Started (Ctrl+F9 toggle mode).\n");
                         fflush(stdout);
@@ -395,6 +395,7 @@ int main()
                     toggle_mode_active = false;
                     wave_overlay.set_listening(false);
                     wave_overlay.set_input_level(0.0f);
+                    wave_overlay.hide();
                     printf("[AUDIO] Stopped (Ctrl+F9 toggle mode).\n");
                     fflush(stdout);
                 }
@@ -429,6 +430,7 @@ int main()
                     ralt_mode_active = true;
                     ralt_lock_active = false;
                     g_ralt_lock_mode = false;
+                    wave_overlay.show();
                     wave_overlay.set_listening(true);
                     ralt_record_start_time = std::chrono::steady_clock::now();
                     printf("[AUDIO] Recording (RAlt hold mode)...\n");
@@ -462,6 +464,7 @@ int main()
                 g_ralt_lock_mode = false;
                 wave_overlay.set_listening(false);
                 wave_overlay.set_input_level(0.0f);
+                wave_overlay.hide();
                 if (was_locked)
                 {
                     printf("[AUDIO] Stopped (RAlt lock mode).\n");
@@ -524,6 +527,7 @@ int main()
             audio.stop();
             wave_overlay.set_listening(false);
             wave_overlay.set_input_level(0.0f);
+            wave_overlay.hide();
         }
 
         UnhookWindowsHookEx(keyboard_hook);
