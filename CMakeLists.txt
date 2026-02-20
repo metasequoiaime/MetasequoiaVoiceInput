@@ -69,6 +69,7 @@ target_link_libraries(${MY_EXECUTABLE_NAME}
     nlohmann_json::nlohmann_json
     d2d1
     User32
+    dwmapi
 )
 
 # Target include directories

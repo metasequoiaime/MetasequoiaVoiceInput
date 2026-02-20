@@ -51,4 +51,5 @@ class WaveOverlay
     struct ID2D1HwndRenderTarget *render_target_ = nullptr;
     struct ID2D1SolidColorBrush *bar_brush_ = nullptr;
     struct ID2D1SolidColorBrush *bg_brush_ = nullptr;
+    struct ID2D1SolidColorBrush *border_brush_ = nullptr;
 };

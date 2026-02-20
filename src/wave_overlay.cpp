@@ -1,16 +1,18 @@
 #include "wave_overlay.h"
+#include "mvi_utils.h"
 
 #include <d2d1.h>
 #include <d2d1helper.h>
 #include <algorithm>
 #include <cmath>
+#include <dwmapi.h>
 
 namespace
 {
 constexpr wchar_t kClassName[] = L"MviWaveOverlayWindow";
 constexpr UINT_PTR kTimerId = 1;
 constexpr UINT kTimerMs = 16;
-constexpr int kWidth = 156;
+constexpr int kWidth = 100;
 constexpr int kHeight = 48;
 constexpr int kBarCount = 12;
 constexpr float kDotRadius = 1.3f;
@@ -73,13 +75,37 @@ bool WaveOverlay::init(HINSTANCE instance)
         return false;
     }
 
-    hwnd_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, kClassName, L"", WS_POPUP, 120, 120, kWidth, kHeight, nullptr, nullptr, instance_, this);
+    hwnd_ = CreateWindowExW(                                                 //
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE, //
+        kClassName,                                                          //
+        L"",                                                                 //
+        WS_POPUP,                                                            //
+        120,                                                                 //
+        120,                                                                 //
+        kWidth,                                                              //
+        kHeight,                                                             //
+        nullptr,                                                             //
+        nullptr,                                                             //
+        instance_,                                                           //
+        this);
 
     if (!hwnd_)
     {
         shutdown();
         return false;
     }
+
+    // 设置窗口透明
+    SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
+    MARGINS mar = {-1};
+    DwmExtendFrameIntoClientArea(hwnd_, &mar);
+
+    // 窗口放置到任务栏上方一点点，并且居中
+    RECT rc = mvi_utils::GetMonitorCoordinates();
+    const int taskbar_height = mvi_utils::GetTaskbarHeight();
+    const int x = (rc.right + rc.left) / 2 - kWidth / 2;
+    const int y = rc.bottom - taskbar_height - kHeight - 10; // 10 是额外的偏移，让窗口离任务栏更远一些
+    SetWindowPos(hwnd_, HWND_TOPMOST, x, y, kWidth, kHeight, SWP_NOACTIVATE);
 
     return true;
 }
@@ -195,20 +221,26 @@ bool WaveOverlay::ensure_render_target()
     GetClientRect(hwnd_, &rc);
 
     D2D1_SIZE_U size = D2D1::SizeU(static_cast<UINT>(rc.right - rc.left), static_cast<UINT>(rc.bottom - rc.top));
-    const HRESULT hr = factory_->CreateHwndRenderTarget(D2D1::RenderTargetProperties(), D2D1::HwndRenderTargetProperties(hwnd_, size), &render_target_);
+    const HRESULT hr = factory_->CreateHwndRenderTarget(D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED)), D2D1::HwndRenderTargetProperties(hwnd_, size), &render_target_);
 
     if (FAILED(hr))
     {
         return false;
     }
 
-    if (FAILED(render_target_->CreateSolidColorBrush(D2D1::ColorF(0.07f, 0.08f, 0.10f, 0.92f), &bg_brush_)))
+    if (FAILED(render_target_->CreateSolidColorBrush(D2D1::ColorF(0.07f, 0.08f, 0.10f, 0.90f), &bg_brush_)))
     {
         release_render_target();
         return false;
     }
 
     if (FAILED(render_target_->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &bar_brush_)))
+    {
+        release_render_target();
+        return false;
+    }
+
+    if (FAILED(render_target_->CreateSolidColorBrush(D2D1::ColorF(0.90f, 0.93f, 1.0f, 0.20f), &border_brush_)))
     {
         release_render_target();
         return false;
@@ -222,6 +254,7 @@ void WaveOverlay::release_render_target()
 {
     safe_release(&bar_brush_);
     safe_release(&bg_brush_);
+    safe_release(&border_brush_);
     safe_release(&render_target_);
 }
 
@@ -291,7 +324,7 @@ void WaveOverlay::draw()
     const float side_margin = kDotRadius + 0.25f;
     const float track_width = std::max(1.0f, w - 2.0f * side_margin);
     const float base_step = (kBarCount > 1) ? (track_width / static_cast<float>(kBarCount - 1)) : 0.0f;
-    const float step = base_step * 0.5f; // halve spacing while keeping window size unchanged
+    const float step = base_step * 0.75f; // 减小一点间距，让波形更紧凑一些
     const float used_width = step * static_cast<float>(kBarCount - 1);
     const float start_x = (w - used_width) * 0.5f;
     const float dot_radius = kDotRadius;
@@ -299,8 +332,12 @@ void WaveOverlay::draw()
 
     render_target_->BeginDraw();
     render_target_->SetTransform(D2D1::Matrix3x2F::Identity());
+    render_target_->Clear(D2D1::ColorF(0, 0, 0, 0));
 
-    render_target_->FillRectangle(D2D1::RectF(0.0f, 0.0f, w, h), bg_brush_);
+    const float corner = std::max(8.0f, h * 0.26f);
+    const D2D1_ROUNDED_RECT panel = D2D1::RoundedRect(D2D1::RectF(0.5f, 0.5f, w - 0.5f, h - 0.5f), corner, corner);
+    render_target_->FillRoundedRectangle(panel, bg_brush_);
+    render_target_->DrawRoundedRectangle(panel, border_brush_, 1.0f);
 
     for (int i = 0; i < kBarCount; ++i)
     {
