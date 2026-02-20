@@ -10,11 +10,11 @@ namespace
 constexpr wchar_t kClassName[] = L"MviWaveOverlayWindow";
 constexpr UINT_PTR kTimerId = 1;
 constexpr UINT kTimerMs = 16;
-constexpr int kWidth = 220;
-constexpr int kHeight = 64;
-constexpr int kBarCount = 30;
-constexpr float kDotRadius = 1.6f;
-constexpr float kMaxHalfHeight = 27.0f;
+constexpr int kWidth = 156;
+constexpr int kHeight = 48;
+constexpr int kBarCount = 12;
+constexpr float kDotRadius = 1.3f;
+constexpr float kMaxHalfHeight = 20.0f;
 
 template <typename T> void safe_release(T **obj)
 {
@@ -28,6 +28,15 @@ template <typename T> void safe_release(T **obj)
 
 WaveOverlay::WaveOverlay()
 {
+    // Deterministic-but-irregular profile per bar:
+    // each bar has different amplitude/frequency/phase so movement looks natural.
+    for (int i = 0; i < kBarCount; ++i)
+    {
+        const float fi = static_cast<float>(i);
+        amplitudes_[i] = 0.55f + 0.45f * std::fabs(std::sin(0.73f * fi + 0.19f));
+        phases_[i] = 0.41f * fi + 0.37f * std::sin(0.29f * fi + 1.11f);
+        freqs_[i] = 4.2f + std::fmod(1.7f * fi, 3.6f);
+    }
 }
 
 WaveOverlay::~WaveOverlay()
@@ -232,15 +241,35 @@ void WaveOverlay::update_wave_levels()
 {
     const bool listening = listening_.load();
     const float level = listening ? input_level_.load() : 0.0f;
+    const float t = static_cast<float>(GetTickCount64() * 0.001);
 
     for (int i = 0; i < kBarCount; ++i)
     {
-        const float position = std::abs((static_cast<float>(i) - (kBarCount - 1) * 0.5f) / ((kBarCount - 1) * 0.5f));
-        const float shape = 1.0f - position;
-        const float target = level * (0.45f + 0.55f * shape);
+        const float p = phases_[i];
+        const float f = freqs_[i];
+        const float center = 0.5f * static_cast<float>(kBarCount - 1);
+        const float dist = std::abs(static_cast<float>(i) - center) / std::max(1.0f, center);
+        const float center_boost = 1.0f + 0.75f * (1.0f - dist); // stronger expansion near center when speaking
 
-        const float attack = 0.35f;
-        const float decay = 0.08f;
+        // Multi-harmonic motion. Keep irregularity, but avoid excessive high-frequency jitter.
+        const float n1 = 0.5f + 0.5f * std::sin(t * f + p);
+        const float n2 = 0.5f + 0.5f * std::sin(t * (0.57f * f) + 1.7f * p + 0.9f);
+        const float n3 = 0.5f + 0.5f * std::sin(t * (1.23f * f) + 0.6f * p + 2.1f);
+        const float irregular = std::min(1.0f, 0.60f * n1 + 0.30f * n2 + 0.10f * n3);
+
+        // When signal is weak, floor also drops so bars settle back to dots smoothly.
+        const float floor = level * (0.06f + 0.12f * n3);
+        float target = level * amplitudes_[i] * center_boost * std::max(floor, irregular);
+
+        // Add transient punch on rising edge so start feels more energetic.
+        if (target > levels_[i])
+        {
+            const float transient = 0.22f * level * (1.0f - levels_[i]);
+            target = std::min(1.0f, target + transient);
+        }
+
+        const float attack = 0.52f;
+        const float decay = listening ? 0.07f : 0.045f;
         const float smooth = target > levels_[i] ? attack : decay;
         levels_[i] = levels_[i] * (1.0f - smooth) + target * smooth;
     }
@@ -259,8 +288,14 @@ void WaveOverlay::draw()
     const float w = static_cast<float>(rc.right - rc.left) / scale_x_;
     const float h = static_cast<float>(rc.bottom - rc.top) / scale_y_;
     const float center_y = h * 0.5f;
-    const float step = w / static_cast<float>(kBarCount);
-    const float bar_width = std::max(2.0f, step * 0.45f);
+    const float side_margin = kDotRadius + 0.25f;
+    const float track_width = std::max(1.0f, w - 2.0f * side_margin);
+    const float base_step = (kBarCount > 1) ? (track_width / static_cast<float>(kBarCount - 1)) : 0.0f;
+    const float step = base_step * 0.5f; // halve spacing while keeping window size unchanged
+    const float used_width = step * static_cast<float>(kBarCount - 1);
+    const float start_x = (w - used_width) * 0.5f;
+    const float dot_radius = kDotRadius;
+    const float bar_width = std::max(dot_radius * 2.0f, base_step * 0.26f);
 
     render_target_->BeginDraw();
     render_target_->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -269,11 +304,11 @@ void WaveOverlay::draw()
 
     for (int i = 0; i < kBarCount; ++i)
     {
-        const float x = (i + 0.5f) * step;
-        const float half = kDotRadius + levels_[i] * (kMaxHalfHeight - kDotRadius);
+        const float x = start_x + i * step;
+        const float half = dot_radius + levels_[i] * (kMaxHalfHeight - dot_radius);
         if (levels_[i] < 0.06f)
         {
-            render_target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, center_y), kDotRadius, kDotRadius), bar_brush_);
+            render_target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, center_y), dot_radius, dot_radius), bar_brush_);
         }
         else
         {

@@ -32,6 +32,8 @@ class WaveOverlay
     void update_dpi_scale();
 
   private:
+    static constexpr int kLevelCount = 12;
+
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
     UINT dpi_ = 96;
@@ -40,7 +42,10 @@ class WaveOverlay
 
     std::atomic<bool> listening_{false};
     std::atomic<float> input_level_{0.0f};
-    float levels_[30] = {};
+    float levels_[kLevelCount] = {};
+    float amplitudes_[kLevelCount] = {};
+    float phases_[kLevelCount] = {};
+    float freqs_[kLevelCount] = {};
 
     struct ID2D1Factory *factory_ = nullptr;
     struct ID2D1HwndRenderTarget *render_target_ = nullptr;
