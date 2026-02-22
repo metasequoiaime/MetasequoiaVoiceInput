@@ -12,6 +12,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <filesystem>
 #include "silero_vad.h"
 #include "audio_capture.h"
 #include "whisper_worker.h"
@@ -19,6 +20,7 @@
 #include "send_input.h"
 #include "mvi_utils.h"
 #include "wave_overlay.h"
+#include "cue_player.h"
 #include <fmt/format.h>
 #include <windows.h>
 
@@ -48,6 +50,48 @@ std::atomic<bool> g_rctrl_pressed{false};
 std::atomic<bool> g_f9_pressed{false};
 std::atomic<bool> g_ralt_lock_mode{false};
 DWORD g_main_thread_id = 0;
+
+std::wstring get_exe_dir()
+{
+    wchar_t module_path[MAX_PATH] = {};
+    const DWORD len = GetModuleFileNameW(nullptr, module_path, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH)
+    {
+        return L"";
+    }
+    std::filesystem::path p(module_path);
+    return p.parent_path().wstring();
+}
+
+std::wstring resolve_asset_audio_path(const wchar_t *filename)
+{
+    namespace fs = std::filesystem;
+    const fs::path cwd = fs::current_path();
+    const fs::path exe_dir = get_exe_dir();
+
+    const fs::path candidates[] = {
+        cwd / L"assets" / filename, exe_dir / L"assets" / filename, exe_dir / L".." / L"assets" / filename, exe_dir / L".." / L".." / L"assets" / filename, exe_dir / L".." / L".." / L".." / L"assets" / filename,
+    };
+
+    for (const auto &path : candidates)
+    {
+        std::error_code ec;
+        if (fs::exists(path, ec) && !ec)
+        {
+            return path.wstring();
+        }
+    }
+    return L"";
+}
+
+void force_release_ralt_key()
+{
+    INPUT in{};
+    in.type = INPUT_KEYBOARD;
+    in.ki.wVk = VK_RMENU;
+    in.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &in, sizeof(in));
+}
 
 bool is_ctrl_pressed()
 {
@@ -329,6 +373,23 @@ int main()
             }
         };
 
+        const std::wstring start_cue_path = resolve_asset_audio_path(L"start.mp3");
+        const std::wstring end_cue_path = resolve_asset_audio_path(L"end.mp3");
+        CuePlayer cue_player;
+
+        if (start_cue_path.empty())
+        {
+            printf("[AUDIO] start.mp3 not found in assets.\n");
+            fflush(stdout);
+        }
+        if (end_cue_path.empty())
+        {
+            printf("[AUDIO] end.mp3 not found in assets.\n");
+            fflush(stdout);
+        }
+
+        cue_player.init(start_cue_path, end_cue_path);
+
         g_main_thread_id = GetCurrentThreadId();
 
         MSG init_msg{};
@@ -384,6 +445,7 @@ int main()
                         toggle_mode_active = true;
                         wave_overlay.show();
                         wave_overlay.set_listening(true);
+                        cue_player.play_start();
                         printf("[AUDIO] Started (Ctrl+F9 toggle mode).\n");
                         fflush(stdout);
                     }
@@ -396,6 +458,7 @@ int main()
                     wave_overlay.set_listening(false);
                     wave_overlay.set_input_level(0.0f);
                     wave_overlay.hide();
+                    cue_player.play_end();
                     printf("[AUDIO] Stopped (Ctrl+F9 toggle mode).\n");
                     fflush(stdout);
                 }
@@ -433,6 +496,7 @@ int main()
                     wave_overlay.show();
                     wave_overlay.set_listening(true);
                     ralt_record_start_time = std::chrono::steady_clock::now();
+                    cue_player.play_start();
                     printf("[AUDIO] Recording (RAlt hold mode)...\n");
                     fflush(stdout);
                 }
@@ -465,6 +529,7 @@ int main()
                 wave_overlay.set_listening(false);
                 wave_overlay.set_input_level(0.0f);
                 wave_overlay.hide();
+                cue_player.play_end();
                 if (was_locked)
                 {
                     printf("[AUDIO] Stopped (RAlt lock mode).\n");
@@ -528,7 +593,13 @@ int main()
             wave_overlay.set_listening(false);
             wave_overlay.set_input_level(0.0f);
             wave_overlay.hide();
+            cue_player.play_end();
         }
+
+        cue_player.shutdown();
+        g_ralt_pressed = false;
+        g_ralt_lock_mode = false;
+        force_release_ralt_key();
 
         UnhookWindowsHookEx(keyboard_hook);
         wave_overlay.shutdown();

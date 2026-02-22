@@ -39,6 +39,8 @@ set(SOURCE_FILES
     "src/audio_capture.h"
     "src/cloud_stt_worker.cpp"
     "src/cloud_stt_worker.h"
+    "src/cue_player.cpp"
+    "src/cue_player.h"
     "src/main.cpp"
     "src/mvi_utils.cpp"
     "src/mvi_utils.h"
