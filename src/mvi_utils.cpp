@@ -1,6 +1,6 @@
 #include "mvi_utils.h"
+#include "mvi_config.h"
 #include <windows.h>
-#include <fstream>
 
 // Convert UTF-8 std::string to std::wstring
 std::wstring mvi_utils::utf8_to_wstring(const std::string &str)
@@ -15,22 +15,7 @@ std::wstring mvi_utils::utf8_to_wstring(const std::string &str)
 
 std::string mvi_utils::retrive_token()
 {
-    std::string cloud_token;
-    char *buf = nullptr;
-    size_t sz = 0;
-    // Use _dupenv_s instead of getenv to avoid C4996 warning and ensure thread safety
-    if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr)
-    {
-        std::string token_path = std::string(buf) + "\\MetasequoiaVoiceInput\\token.txt";
-        std::ifstream token_file(token_path);
-        if (token_file.is_open())
-        {
-            std::getline(token_file, cloud_token);
-            token_file.close();
-        }
-        free(buf);
-    }
-    return cloud_token;
+    return mvi_config::GetApiToken();
 }
 
 std::wstring mvi_utils::get_vad_model_path()

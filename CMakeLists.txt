@@ -21,6 +21,7 @@ find_package(onnxruntime CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(tomlplusplus CONFIG REQUIRED)
 
 # whisper.cpp
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "whisper: build examples" FORCE)
@@ -42,6 +43,8 @@ set(SOURCE_FILES
     "src/cue_player.cpp"
     "src/cue_player.h"
     "src/main.cpp"
+    "src/mvi_config.cpp"
+    "src/mvi_config.h"
     "src/mvi_utils.cpp"
     "src/mvi_utils.h"
     "src/send_input.cpp"
@@ -69,6 +72,7 @@ target_link_libraries(${MY_EXECUTABLE_NAME}
     onnxruntime::onnxruntime
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    tomlplusplus::tomlplusplus
     d2d1
     User32
     dwmapi
@@ -80,4 +84,5 @@ target_include_directories(${MY_EXECUTABLE_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniaudio
+    ${CMAKE_SOURCE_DIR}/build/vcpkg_installed/x64-windows/include
 )

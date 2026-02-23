@@ -3,6 +3,7 @@
     "fmt",
     "onnxruntime",
     "curl",
-    "nlohmann-json"
+    "nlohmann-json",
+    "tomlplusplus"
   ]
 }
