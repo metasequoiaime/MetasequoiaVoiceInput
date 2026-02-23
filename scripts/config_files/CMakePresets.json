@@ -6,11 +6,25 @@
       "generator": "Visual Studio 18 2026",
       "binaryDir": "${sourceDir}/build",
       "environment": {
-        "VCPKG_ROOT": "C:/Users/sonnycalcr/scoop/apps/vcpkg/current/"
+        "VCPKG_ROOT": "C:/Users/SonnyCalcr/scoop/apps/vcpkg/current"
       },
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "C:/Users/sonnycalcr/scoop/apps/vcpkg/current/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_TOOLCHAIN_FILE": "C:/Users/SonnyCalcr/scoop/apps/vcpkg/current/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-ort-static",
         "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "vcpkg-release",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build",
+      "environment": {
+        "VCPKG_ROOT": "C:/Users/SonnyCalcr/scoop/apps/vcpkg/current"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "C:/Users/SonnyCalcr/scoop/apps/vcpkg/current/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-ort-static",
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ]

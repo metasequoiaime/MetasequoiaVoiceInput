@@ -9,7 +9,7 @@ CompileFlags:
       "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/build/vcpkg_installed/x64-windows-ort-static/include",
       "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/third_party/miniaudio",
       "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/third_party/whisper.cpp/include",
-      "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/third_party/whisper.cpp/ggml/include", # ggml
+      "-IC:/Users/SonnyCalcr/EDisk/CppCodes/IMECodes/MetasequoiaVoiceInput/third_party/whisper.cpp/ggml/include",
       -Wno-microsoft-goto,
       -Wno-nonportable-include-path,
       -Wno-microsoft-extra-qualification,
