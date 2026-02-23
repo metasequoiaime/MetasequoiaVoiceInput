@@ -29,7 +29,7 @@ std::string mvi_config::GetConfigPath()
     return localappdata + "\\MetasequoiaVoiceInput\\config.toml";
 }
 
-std::string mvi_config::GetApiToken()
+std::string mvi_config::GetApiToken(std::string api_type)
 {
     const std::string config_path = GetConfigPath();
     if (config_path.empty())
@@ -40,7 +40,16 @@ std::string mvi_config::GetApiToken()
     try
     {
         const toml::table config = toml::parse_file(config_path);
-        if (const toml::node_view<const toml::node> token_node = config["api"]["token"]; token_node.is_string())
+        std::string node_api_type;
+        if (api_type == "asr")
+        {
+            node_api_type = "asr_api";
+        }
+        else
+        {
+            node_api_type = "polish_api";
+        }
+        if (const toml::node_view<const toml::node> token_node = config[node_api_type]["token"]; token_node.is_string())
         {
             return token_node.value_or("");
         }
@@ -55,4 +64,60 @@ std::string mvi_config::GetApiToken()
     }
 
     return "";
+}
+
+std::string mvi_config::GetLanguage()
+{
+    const std::string config_path = GetConfigPath();
+    if (config_path.empty())
+    {
+        return "zh-cn";
+    }
+
+    try
+    {
+        const toml::table config = toml::parse_file(config_path);
+        if (const toml::node_view<const toml::node> language_node = config["settings"]["language"]; language_node.is_string())
+        {
+            return language_node.value_or("zh-cn");
+        }
+    }
+    catch (const toml::parse_error &)
+    {
+        return "zh-cn";
+    }
+    catch (const std::exception &)
+    {
+        return "zh-cn";
+    }
+
+    return "zh-cn";
+}
+
+bool mvi_config::GetPolishTextEnabled()
+{
+    const std::string config_path = GetConfigPath();
+    if (config_path.empty())
+    {
+        return false;
+    }
+
+    try
+    {
+        const toml::table config = toml::parse_file(config_path);
+        if (const toml::node_view<const toml::node> polish_node = config["settings"]["polish_text"]; polish_node.is_boolean())
+        {
+            return polish_node.value_or(false);
+        }
+    }
+    catch (const toml::parse_error &)
+    {
+        return false;
+    }
+    catch (const std::exception &)
+    {
+        return false;
+    }
+
+    return false;
 }

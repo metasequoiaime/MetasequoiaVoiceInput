@@ -19,8 +19,10 @@
 #include "cloud_stt_worker.h"
 #include "send_input.h"
 #include "mvi_utils.h"
+#include "mvi_config.h"
 #include "wave_overlay.h"
 #include "cue_player.h"
+#include "text_polisher.h"
 #include <fmt/format.h>
 #include <windows.h>
 
@@ -33,6 +35,8 @@ enum class SttProvider
 
 SttProvider g_stt_provider = SttProvider::CloudSiliconFlow; // Default to Cloud for testing
 std::string g_cloud_token;
+std::string g_language = "zh-cn";
+bool g_polish_text = false;
 
 namespace
 {
@@ -232,6 +236,8 @@ int main()
 
     // Set up token
     g_cloud_token = mvi_utils::retrive_token();
+    g_language = mvi_config::GetLanguage();
+    g_polish_text = mvi_config::GetPolishTextEnabled();
 
     // silero_vad.onnx path
     std::wstring vad_model_path = mvi_utils::get_vad_model_path();
@@ -251,6 +257,7 @@ int main()
         fflush(stdout);
 
         std::unique_ptr<SttService> stt;
+        std::unique_ptr<TextPolisher> text_polisher;
 
         if (g_stt_provider == SttProvider::LocalWhisper)
         {
@@ -263,6 +270,16 @@ int main()
             printf("[INIT] Initializing Cloud STT (SiliconFlow)...\n");
             stt = std::make_unique<CloudSttWorker>(g_cloud_token);
             printf("[INIT] Cloud STT Ready.\n");
+        }
+
+        if (g_polish_text)
+        {
+            text_polisher = std::make_unique<TextPolisher>(g_cloud_token, g_language);
+            printf("[INIT] Text polishing enabled.\n");
+        }
+        else
+        {
+            printf("[INIT] Text polishing disabled.\n");
         }
         fflush(stdout);
 
@@ -307,8 +324,17 @@ int main()
                 if (!text.empty())
                 {
                     printf("[STT] Recognized: %s\n", text.c_str());
+                    std::string final_text = text;
+                    if (text_polisher != nullptr)
+                    {
+                        auto polish_start = std::chrono::steady_clock::now();
+                        final_text = text_polisher->polish(text);
+                        auto polish_end = std::chrono::steady_clock::now();
+                        std::cout << "[POLISH] Time: " << std::chrono::duration<double>(polish_end - polish_start).count() << "s\n";
+                        printf("[POLISH] Output: %s\n", final_text.c_str());
+                    }
                     fflush(stdout);
-                    send_text(mvi_utils::utf8_to_wstring(text));
+                    send_text(mvi_utils::utf8_to_wstring(final_text));
                 }
             }
         });

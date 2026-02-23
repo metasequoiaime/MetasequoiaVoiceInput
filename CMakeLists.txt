@@ -52,6 +52,8 @@ set(SOURCE_FILES
     "src/silero_vad.cpp"
     "src/silero_vad.h"
     "src/stt_service.h"
+    "src/text_polisher.cpp"
+    "src/text_polisher.h"
     "src/vad.cpp"
     "src/vad.h"
     "src/wave_overlay.cpp"
