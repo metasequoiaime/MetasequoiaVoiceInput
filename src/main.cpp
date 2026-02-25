@@ -12,7 +12,6 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <filesystem>
 #include "silero_vad.h"
 #include "audio_capture.h"
 #include "whisper_worker.h"
@@ -54,39 +53,6 @@ std::atomic<bool> g_rctrl_pressed{false};
 std::atomic<bool> g_f9_pressed{false};
 std::atomic<bool> g_ralt_lock_mode{false};
 DWORD g_main_thread_id = 0;
-
-std::wstring get_exe_dir()
-{
-    wchar_t module_path[MAX_PATH] = {};
-    const DWORD len = GetModuleFileNameW(nullptr, module_path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH)
-    {
-        return L"";
-    }
-    std::filesystem::path p(module_path);
-    return p.parent_path().wstring();
-}
-
-std::wstring resolve_asset_audio_path(const wchar_t *filename)
-{
-    namespace fs = std::filesystem;
-    const fs::path cwd = fs::current_path();
-    const fs::path exe_dir = get_exe_dir();
-
-    const fs::path candidates[] = {
-        cwd / L"assets" / filename, exe_dir / L"assets" / filename, exe_dir / L".." / L"assets" / filename, exe_dir / L".." / L".." / L"assets" / filename, exe_dir / L".." / L".." / L".." / L"assets" / filename,
-    };
-
-    for (const auto &path : candidates)
-    {
-        std::error_code ec;
-        if (fs::exists(path, ec) && !ec)
-        {
-            return path.wstring();
-        }
-    }
-    return L"";
-}
 
 void force_release_ralt_key()
 {
@@ -399,8 +365,9 @@ int main()
             }
         };
 
-        const std::wstring start_cue_path = resolve_asset_audio_path(L"start.mp3");
-        const std::wstring end_cue_path = resolve_asset_audio_path(L"end.mp3");
+        // 从 app data 目录中去取
+        const std::wstring start_cue_path = mvi_utils::resolve_asset_audio_path("start.mp3");
+        const std::wstring end_cue_path = mvi_utils::resolve_asset_audio_path("end.mp3");
         CuePlayer cue_player;
 
         if (start_cue_path.empty())

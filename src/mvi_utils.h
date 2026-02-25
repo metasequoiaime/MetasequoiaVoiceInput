@@ -16,4 +16,5 @@ std::string get_ggml_model_path();
 int GetTaskbarHeight();
 RECT GetMonitorCoordinates();
 RECT GetMainMonitorCoordinates();
+std::wstring resolve_asset_audio_path(std::string filename);
 } // namespace mvi_utils

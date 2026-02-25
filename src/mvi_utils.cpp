@@ -139,3 +139,17 @@ RECT mvi_utils::GetMainMonitorCoordinates()
 
     return coordinates;
 }
+
+std::wstring mvi_utils::resolve_asset_audio_path(std::string filename)
+{
+    std::string audio_path;
+    char *buf = nullptr;
+    size_t sz = 0;
+    // Use _dupenv_s instead of getenv to avoid C4996 warning and ensure thread safety
+    if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr)
+    {
+        audio_path = std::string(buf) + "\\MetasequoiaVoiceInput\\audios\\" + filename;
+        free(buf);
+    }
+    return utf8_to_wstring(audio_path);
+}
