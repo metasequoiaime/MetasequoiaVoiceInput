@@ -1,0 +1,22 @@
+# 自动语音识别（ASR）配置
+[asr_api]
+# 服务提供商（如：siliconflow、azure、openai、deepgram 等）
+provider = "siliconflow"
+# API 访问令牌
+token = "<YOUR_OWN_TOKEN>"
+# API 基础地址
+endpoint = "https://api.siliconflow.cn/v1/audio/transcriptions"
+
+# 文本润色配置
+[polish_api]
+provider = "siliconflow"
+token = "<YOUR_OWN_TOKEN>"
+# API 基础地址
+endpoint = "https://api.siliconflow.cn/v1/chat/completions"
+
+# 基础设置
+[settings]
+# 偏好语言
+language = "zh-cn"
+# 上屏前是否要先进行文本润色
+polish_text = true
