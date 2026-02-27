@@ -4,6 +4,7 @@
     "onnxruntime",
     "curl",
     "nlohmann-json",
-    "tomlplusplus"
+    "tomlplusplus",
+    "webview2"
   ]
 }

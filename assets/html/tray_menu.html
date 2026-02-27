@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>(IME)TrayMenu</title>
+  <style>
+    body {
+      background-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+
+    .menu {
+      background-color: #2b2b2b;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 0.2em 0;
+      width: 12em;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      user-select: none;
+    }
+
+    .menu-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.4em 0.4em;
+      font-size: 14px;
+      color: #e0e0e0;
+      border-radius: 6px;
+      margin: 1px 6px;
+    }
+
+    .menu-item:hover {
+      background-color: #3b3b3b;
+      color: #fff;
+    }
+
+    .menu-item-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 32px;
+      height: 16px;
+      background: #555;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      top: 1px;
+      left: 1px;
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+
+    .toggle.active {
+      background: #8E8CD8;
+    }
+
+    .toggle.active::after {
+      transform: translateX(16px);
+    }
+
+    .shortcut {
+      font-family: consolas;
+      font-weight: 600;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="menu" id="menuContainer">
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>🖲️</span>
+        悬浮工具栏
+      </div>
+      <div class="toggle active" id="floatingToggle"></div>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>😊</span>
+        表情面板
+      </div>
+      <span class="shortcut">Win+⇧+.</span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>🔣</span>
+        符号面板
+      </div>
+      <span class="shortcut">Win+⇧+I</span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>✍️</span>
+        手写输入板
+      </div>
+      <span class="shortcut">Win+⇧+P</span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>🖥️</span>
+        屏幕键盘
+      </div>
+      <span class="shortcut">Win+⇧+K</span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>🎙️</span>
+        语音输入
+      </div>
+      <span class="shortcut">Win+⇧+V</span>
+    </div>
+
+    <div class="menu-item" id="settings">
+      <div class="menu-item-left">
+        <span>⚙️</span>
+        设置
+      </div>
+      <span class="shortcut">Win+⇧+S</span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>ℹ️</span>
+        关于
+      </div>
+      <span class="shortcut"></span>
+    </div>
+
+    <div class="menu-item">
+      <div class="menu-item-left">
+        <span>❓</span>
+        帮助与反馈
+      </div>
+      <span class="shortcut"></span>
+    </div>
+  </div>
+
+  <script>
+  </script>
+</body>
+
+</html>

@@ -17,4 +17,5 @@ int GetTaskbarHeight();
 RECT GetMonitorCoordinates();
 RECT GetMainMonitorCoordinates();
 std::wstring resolve_asset_audio_path(std::string filename);
+FLOAT GetForegroundWindowScale();
 } // namespace mvi_utils

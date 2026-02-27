@@ -81,7 +81,7 @@ FLOAT GetWindowScale(HWND hwnd)
     return scale;
 }
 
-FLOAT GetForegroundWindowScale()
+FLOAT mvi_utils::GetForegroundWindowScale()
 {
     HWND hwnd = GetForegroundWindow();
     FLOAT scale = GetWindowScale(hwnd);

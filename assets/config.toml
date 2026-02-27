@@ -19,4 +19,6 @@ endpoint = "https://api.siliconflow.cn/v1/chat/completions"
 # 偏好语言
 language = "zh-cn"
 # 上屏前是否要先进行文本润色
-polish_text = true
+polish_text = false
+# 触发时是否播放提示音
+notification_sound = true

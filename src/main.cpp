@@ -22,6 +22,7 @@
 #include "wave_overlay.h"
 #include "cue_player.h"
 #include "text_polisher.h"
+#include "window_webview2.h"
 #include <fmt/format.h>
 #include <windows.h>
 
@@ -195,6 +196,15 @@ int main()
     // g_stt_provider = SttProvider::LocalWhisper;
 
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    const HINSTANCE app_instance = GetModuleHandleW(nullptr);
+    const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const bool need_com_uninitialize = (com_hr == S_OK || com_hr == S_FALSE);
+    if (FAILED(com_hr) && com_hr != RPC_E_CHANGED_MODE)
+    {
+        printf("FATAL ERROR: CoInitializeEx failed: 0x%08lx\n", static_cast<unsigned long>(com_hr));
+        fflush(stdout);
+        return 1;
+    }
 
     // Set console code page to UTF-8 so console can display UTF-8 characters correctly
     SetConsoleOutputCP(CP_UTF8);
@@ -387,6 +397,18 @@ int main()
 
         MSG init_msg{};
         PeekMessage(&init_msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+
+        window_webview2::TrayMenuConfig tray_config{};
+        tray_config.main_thread_id = g_main_thread_id;
+        tray_config.msg_toggle_record = WM_APP_TOGGLE_RECORD;
+        tray_config.msg_exit = WM_APP_EXIT;
+        tray_config.app_name = L"MetasequoiaVoiceInput";
+        tray_config.default_width = 300;
+        tray_config.default_height = 360;
+        if (!window_webview2::InitializeTrayUi(app_instance, tray_config))
+        {
+            throw std::runtime_error("Tray UI init failed");
+        }
 
         HHOOK keyboard_hook = SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, GetModuleHandleW(nullptr), 0);
         if (keyboard_hook == nullptr)
@@ -595,6 +617,7 @@ int main()
         force_release_ralt_key();
 
         UnhookWindowsHookEx(keyboard_hook);
+        window_webview2::ShutdownTrayUi(app_instance);
         wave_overlay.shutdown();
 
         if (exit_thread.joinable())
@@ -614,10 +637,20 @@ int main()
     }
     catch (const std::exception &e)
     {
+        window_webview2::ShutdownTrayUi(app_instance);
         printf("FATAL ERROR: %s\n", e.what());
         fflush(stdout);
         MessageBoxA(nullptr, e.what(), "MetasequoiaVoiceInput - Fatal Error", MB_ICONERROR);
+        if (need_com_uninitialize)
+        {
+            CoUninitialize();
+        }
         return 1;
+    }
+
+    if (need_com_uninitialize)
+    {
+        CoUninitialize();
     }
 
     return 0;

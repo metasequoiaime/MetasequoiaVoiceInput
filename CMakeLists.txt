@@ -61,6 +61,8 @@ set(SOURCE_FILES
     "src/wav_writer.h"
     "src/whisper_worker.cpp"
     "src/whisper_worker.h"
+    "src/window_webview2.cpp"
+    "src/window_webview2.h"
 )
 
 set(MY_EXECUTABLE_NAME "MetasequoiaVoiceInput")
