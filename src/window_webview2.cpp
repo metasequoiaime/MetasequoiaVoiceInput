@@ -1,5 +1,6 @@
 #include "window_webview2.h"
 #include "mvi_utils.h"
+#include "resource/resource.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -577,7 +578,7 @@ bool InitializeTrayUi(HINSTANCE instance, const TrayMenuConfig &config)
         return false;
     }
 
-    g_state.tray_icon = static_cast<HICON>(LoadImageW(nullptr, IDI_APPLICATION, IMAGE_ICON, 0, 0, LR_SHARED));
+    g_state.tray_icon = static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE));
     if (g_state.tray_icon == nullptr)
     {
         g_state.tray_icon = LoadIconW(nullptr, IDI_APPLICATION);

@@ -45,6 +45,8 @@ set(SOURCE_FILES
     "src/cue_player.cpp"
     "src/cue_player.h"
     "src/main.cpp"
+    "src/resource/resource.h"
+    "src/resource/app.rc"
     "src/mvi_config.cpp"
     "src/mvi_config.h"
     "src/mvi_utils.cpp"
