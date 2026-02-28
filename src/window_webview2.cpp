@@ -602,6 +602,10 @@ bool InitializeTrayUi(HINSTANCE instance, const TrayMenuConfig &config)
     g_state.notify_icon_added = true;
     g_state.notify_icon.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &g_state.notify_icon);
+
+    // Warm up WebView2 in background so the first tray menu open is responsive.
+    CreateTrayMenuWebViewIfNeeded();
+
     printf("[TRAY] Tray icon initialized.\n");
     fflush(stdout);
     return true;
