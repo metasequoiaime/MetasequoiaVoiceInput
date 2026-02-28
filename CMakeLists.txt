@@ -70,6 +70,15 @@ set(SOURCE_FILES
 set(MY_EXECUTABLE_NAME "MetasequoiaVoiceInput")
 add_executable(${MY_EXECUTABLE_NAME} ${SOURCE_FILES})
 
+# Build as a GUI app so no console window is shown at runtime.
+if(MSVC)
+    target_link_options(${MY_EXECUTABLE_NAME}
+        PRIVATE
+        /SUBSYSTEM:WINDOWS
+        /ENTRY:mainCRTStartup
+    )
+endif()
+
 # Link libraries
 target_link_libraries(${MY_EXECUTABLE_NAME}
     PRIVATE

@@ -194,7 +194,9 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
 int main()
 {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     const HINSTANCE app_instance = GetModuleHandleW(nullptr);
+
     const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const bool need_com_uninitialize = (com_hr == S_OK || com_hr == S_FALSE);
     if (FAILED(com_hr) && com_hr != RPC_E_CHANGED_MODE)
@@ -429,21 +431,14 @@ int main()
             throw std::runtime_error(fmt::format("SetWindowsHookExW failed: {}", GetLastError()));
         }
 
-        std::thread exit_thread([&]() {
-            std::cin.get();
-            PostThreadMessage(g_main_thread_id, WM_APP_EXIT, 0, 0);
-        });
-
         bool audio_started = false;
         bool toggle_mode_active = false;
         bool ralt_mode_active = false;
         bool ralt_lock_active = false;
         auto ralt_record_start_time = std::chrono::steady_clock::now();
 
-        printf("Press Ctrl + F9 to toggle VAD recording.\n");
         printf("Hold RAlt to record one segment. Release RAlt to transcribe and send text.\n");
         printf("While holding RAlt, press Space to lock recording. Press RAlt again to stop and transcribe.\n");
-        printf("Press ENTER to stop and exit.\n");
         fflush(stdout);
 
         MSG msg{};
@@ -632,11 +627,6 @@ int main()
         UnhookWindowsHookEx(keyboard_hook);
         window_webview2::ShutdownTrayUi(app_instance);
         wave_overlay.shutdown();
-
-        if (exit_thread.joinable())
-        {
-            exit_thread.join();
-        }
 
         // 通知 stt 线程停止
         stt_stop = true;
