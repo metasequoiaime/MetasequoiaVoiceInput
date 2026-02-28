@@ -29,6 +29,8 @@ set(WHISPER_BUILD_TESTS OFF CACHE BOOL "whisper: build tests" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "whisper: build server example" FORCE)
 set(WHISPER_USE_ONNX OFF CACHE BOOL "" FORCE)
 set(WHISPER_USE_ONNXRT OFF CACHE BOOL "" FORCE)
+# set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+set(GGML_NATIVE ON CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp)
 
 # miniaudio
@@ -61,6 +63,8 @@ set(SOURCE_FILES
     "src/wav_writer.h"
     "src/whisper_worker.cpp"
     "src/whisper_worker.h"
+    "src/window_webview2.cpp"
+    "src/window_webview2.h"
 )
 
 set(MY_EXECUTABLE_NAME "MetasequoiaVoiceInput")

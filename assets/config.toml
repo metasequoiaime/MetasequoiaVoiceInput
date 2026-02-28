@@ -22,3 +22,5 @@ language = "zh-cn"
 polish_text = false
 # 触发时是否播放提示音
 notification_sound = true
+# 可以选择的值有：local_whisper, cloud_siliconflow
+stt_provider = "cloud_siliconflow"

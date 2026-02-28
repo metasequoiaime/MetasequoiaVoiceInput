@@ -121,3 +121,31 @@ bool mvi_config::GetPolishTextEnabled()
 
     return false;
 }
+
+std::string mvi_config::GetSTTProvider()
+{
+    const std::string config_path = GetConfigPath();
+    if (config_path.empty())
+    {
+        return "cloud_siliconflow";
+    }
+
+    try
+    {
+        const toml::table config = toml::parse_file(config_path);
+        if (const toml::node_view<const toml::node> provider_node = config["settings"]["stt_provider"]; provider_node.is_string())
+        {
+            return provider_node.value_or("cloud_siliconflow");
+        }
+    }
+    catch (const toml::parse_error &)
+    {
+        return "cloud_siliconflow";
+    }
+    catch (const std::exception &)
+    {
+        return "cloud_siliconflow";
+    }
+
+    return "cloud_siliconflow";
+}

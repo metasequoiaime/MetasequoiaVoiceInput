@@ -193,8 +193,6 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
 
 int main()
 {
-    // g_stt_provider = SttProvider::LocalWhisper;
-
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const HINSTANCE app_instance = GetModuleHandleW(nullptr);
     const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -209,6 +207,21 @@ int main()
     // Set console code page to UTF-8 so console can display UTF-8 characters correctly
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+
+    // Set up stt provider from config
+    const std::string stt_provider_str = mvi_config::GetSTTProvider();
+    if (stt_provider_str == "local_whisper")
+    {
+        g_stt_provider = SttProvider::LocalWhisper;
+    }
+    else if (stt_provider_str == "cloud_siliconflow")
+    {
+        g_stt_provider = SttProvider::CloudSiliconFlow;
+    }
+    else
+    {
+        g_stt_provider = SttProvider::CloudSiliconFlow;
+    }
 
     // Set up token
     g_cloud_token = mvi_utils::retrive_token();
