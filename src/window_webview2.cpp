@@ -1,6 +1,7 @@
 #include "window_webview2.h"
 #include "mvi_utils.h"
 #include "resource/resource.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -10,6 +11,7 @@
 #include <winuser.h>
 #include <wrl.h>
 #include <fmt/xchar.h>
+#include <dwmapi.h>
 
 namespace window_webview2
 {
@@ -21,6 +23,7 @@ constexpr UINT WM_APP_TRAY_RESIZE_TO_MENU = WM_APP + 122;
 constexpr UINT k_tray_icon_id = 1;
 constexpr wchar_t k_tray_window_class[] = L"MetasequoiaVoiceInput.TrayWindow";
 constexpr wchar_t k_tray_menu_window_class[] = L"MetasequoiaVoiceInput.TrayMenuWindow";
+constexpr wchar_t k_settings_window_class[] = L"MetasequoiaVoiceInput.SettingsWindow";
 constexpr wchar_t k_tray_tooltip[] = L"MetasequoiaVoiceInput";
 constexpr wchar_t k_menu_size_prefix[] = L"__menu_size__:";
 
@@ -43,6 +46,14 @@ struct TrayUiState
     Microsoft::WRL::ComPtr<ICoreWebView2> webview;
     bool webview_creating = false;
     bool webview_ready = false;
+
+    HWND settings_window = nullptr;
+    Microsoft::WRL::ComPtr<ICoreWebView2Controller> settings_controller;
+    Microsoft::WRL::ComPtr<ICoreWebView2> settings_webview;
+    bool settings_webview_creating = false;
+    bool settings_webview_ready = false;
+    std::wstring settings_html_path;
+
     bool pending_show = false;
     POINT pending_show_point{};
     POINT last_anchor_pos{};
@@ -54,6 +65,8 @@ struct TrayUiState
 };
 
 TrayUiState g_state;
+
+void OpenSettingsWindow(HINSTANCE instance);
 
 std::wstring GetDefaultTrayMenuHtmlPath(const std::wstring &app_name)
 {
@@ -70,6 +83,56 @@ std::wstring GetDefaultTrayMenuHtmlPath(const std::wstring &app_name)
         html_path += L"\\html\\tray_menu.html";
     }
     return html_path;
+}
+
+std::wstring GetDefaultSettingsHtmlPath(const std::wstring &app_name)
+{
+    std::wstring html_path;
+    char *buf = nullptr;
+    size_t sz = 0;
+    if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr)
+    {
+        const std::string local_app_data(buf);
+        free(buf);
+        html_path = mvi_utils::utf8_to_wstring(local_app_data);
+        html_path += L"\\";
+        html_path += app_name;
+        html_path += L"\\html\\setting.html";
+    }
+    return html_path;
+}
+
+std::wstring GetFallbackSettingsHtmlPath(const std::wstring &app_name)
+{
+    std::wstring html_path;
+    char *buf = nullptr;
+    size_t sz = 0;
+    if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr)
+    {
+        const std::string local_app_data(buf);
+        free(buf);
+        html_path = mvi_utils::utf8_to_wstring(local_app_data);
+        html_path += L"\\";
+        html_path += app_name;
+        html_path += L"\\html\\settings.html";
+    }
+    return html_path;
+}
+
+bool IsFilePathValid(const std::wstring &path)
+{
+    if (path.empty())
+    {
+        return false;
+    }
+    const DWORD attrs = GetFileAttributesW(path.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+std::wstring BuildFileUriFromPath(std::wstring path)
+{
+    std::replace(path.begin(), path.end(), L'\\', L'/');
+    return L"file:///" + path;
 }
 
 std::wstring ReadHtmlUtf8AsWide(const std::wstring &path)
@@ -98,6 +161,20 @@ void ResizeWebViewBounds()
     }
 }
 
+void ResizeSettingsWebViewBounds()
+{
+    if (g_state.settings_controller == nullptr || g_state.settings_window == nullptr)
+    {
+        return;
+    }
+
+    RECT client_rect{};
+    if (GetClientRect(g_state.settings_window, &client_rect))
+    {
+        g_state.settings_controller->put_Bounds(client_rect);
+    }
+}
+
 void HideTrayMenuWindow()
 {
     if (g_state.controller != nullptr)
@@ -107,6 +184,18 @@ void HideTrayMenuWindow()
     if (g_state.tray_menu_window != nullptr)
     {
         ShowWindow(g_state.tray_menu_window, SW_HIDE);
+    }
+}
+
+void HideSettingsWindow()
+{
+    if (g_state.settings_controller != nullptr)
+    {
+        g_state.settings_controller->put_IsVisible(FALSE);
+    }
+    if (g_state.settings_window != nullptr)
+    {
+        ShowWindow(g_state.settings_window, SW_HIDE);
     }
 }
 
@@ -159,6 +248,23 @@ void ShowTrayMenuWindowAt(POINT anchor)
     {
         ResizeWebViewBounds();
         g_state.controller->put_IsVisible(TRUE);
+    }
+}
+
+void ShowSettingsWindow()
+{
+    if (g_state.settings_window == nullptr)
+    {
+        return;
+    }
+
+    ShowWindow(g_state.settings_window, SW_SHOW);
+    SetForegroundWindow(g_state.settings_window);
+
+    if (g_state.settings_controller != nullptr)
+    {
+        ResizeSettingsWebViewBounds();
+        g_state.settings_controller->put_IsVisible(TRUE);
     }
 }
 
@@ -215,6 +321,32 @@ bool ParseBodySizeMessage(const std::wstring &message, int &width, int &height)
     {
         return false;
     }
+}
+
+LRESULT CALLBACK SettingsWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_SIZE:
+        ResizeSettingsWebViewBounds();
+        return 0;
+    case WM_CLOSE:
+        HideSettingsWindow();
+        return 0;
+    case WM_DESTROY:
+        if (hwnd == g_state.settings_window)
+        {
+            g_state.settings_window = nullptr;
+            g_state.settings_webview = nullptr;
+            g_state.settings_controller = nullptr;
+            g_state.settings_webview_ready = false;
+            g_state.settings_webview_creating = false;
+        }
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK TrayMenuWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -302,6 +434,69 @@ bool CreateTrayMenuWindow(HINSTANCE instance)
         fflush(stdout);
         return false;
     }
+    return true;
+}
+
+bool CreateSettingsWindow(HINSTANCE instance)
+{
+    if (g_state.settings_window != nullptr)
+    {
+        return true;
+    }
+
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = SettingsWindowProc;
+    wc.hInstance = instance;
+    wc.lpszClassName = k_settings_window_class;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    RegisterClassW(&wc);
+
+    const float scale = mvi_utils::GetForegroundWindowScale();
+    const int width = static_cast<int>(1000 * scale);
+    const int height = static_cast<int>(800 * scale);
+
+    g_state.settings_window = CreateWindowExW( //
+        WS_EX_APPWINDOW,                       //
+        k_settings_window_class,               //
+        L"Settings",                           //
+        WS_OVERLAPPEDWINDOW,                   //
+        CW_USEDEFAULT,                         //
+        CW_USEDEFAULT,                         //
+        width,                                 //
+        height,                                //
+        nullptr,                               //
+        nullptr,                               //
+        instance,                              //
+        nullptr);
+
+    if (g_state.settings_window == nullptr)
+    {
+        printf("[SETTINGS] Failed to create settings window: %lu\n", GetLastError());
+        fflush(stdout);
+        return false;
+    }
+
+    // 使用 DWN 允许透明
+    DWM_BLURBEHIND bb = {0};
+    bb.dwFlags = DWM_BB_ENABLE;
+    bb.fEnable = TRUE;
+    bb.hRgnBlur = nullptr;
+    DwmEnableBlurBehindWindow(g_state.settings_window, &bb);
+    BOOL useDarkMode = TRUE;
+    DwmSetWindowAttribute(             //
+        g_state.settings_window,       //
+        DWMWA_USE_IMMERSIVE_DARK_MODE, //
+        &useDarkMode,                  //
+        sizeof(useDarkMode)            //
+    );
+    // 设置 settings 窗口的自定义图标
+    HICON hSettingsIcon = LoadIcon(instance, MAKEINTRESOURCE(IDI_SETTINGS_ICON));
+    HICON hAppIcon = LoadIcon(instance, MAKEINTRESOURCE(IDI_APP_ICON));
+    SendMessage(g_state.settings_window, WM_SETICON, ICON_SMALL, (LPARAM)hSettingsIcon);
+    SendMessage(g_state.settings_window, WM_SETICON, ICON_BIG, (LPARAM)hAppIcon);
+
     return true;
 }
 
@@ -405,6 +600,11 @@ HRESULT OnControllerCreatedCandWnd(HRESULT result, ICoreWebView2Controller *cont
                 {
                     PostThreadMessage(g_state.config.main_thread_id, g_state.config.msg_toggle_record, 0, 0);
                 }
+                else if (message == L"open_settings")
+                {
+                    HideTrayMenuWindow();
+                    OpenSettingsWindow(GetModuleHandleW(nullptr));
+                }
                 return S_OK;
             })
             .Get(),
@@ -487,6 +687,92 @@ void CreateTrayMenuWebViewIfNeeded()
     }
 }
 
+void CreateSettingsWebViewIfNeeded()
+{
+    if (g_state.settings_webview_ready || g_state.settings_webview_creating || g_state.settings_window == nullptr)
+    {
+        return;
+    }
+    if (!EnsureWebView2Loader())
+    {
+        return;
+    }
+    if (g_state.environment == nullptr)
+    {
+        printf("[SETTINGS] WebView2 environment not ready.\n");
+        fflush(stdout);
+        return;
+    }
+    if (!IsFilePathValid(g_state.settings_html_path))
+    {
+        printf("[SETTINGS] settings html not found: %ls\n", g_state.settings_html_path.c_str());
+        fflush(stdout);
+        return;
+    }
+
+    g_state.settings_webview_creating = true;
+    const HRESULT hr = g_state.environment->CreateCoreWebView2Controller(                    //
+        g_state.settings_window,                                                             //
+        Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>( //
+            [](HRESULT controller_result, ICoreWebView2Controller *controller) -> HRESULT {
+                g_state.settings_webview_creating = false;
+                if (FAILED(controller_result) || controller == nullptr)
+                {
+                    printf("[SETTINGS] Failed to create WebView2 controller: 0x%08lx\n", static_cast<unsigned long>(controller_result));
+                    fflush(stdout);
+                    return S_OK;
+                }
+
+                g_state.settings_controller = controller;
+                g_state.settings_controller->get_CoreWebView2(&g_state.settings_webview);
+                if (g_state.settings_webview == nullptr)
+                {
+                    printf("[SETTINGS] Failed to get CoreWebView2 instance.\n");
+                    fflush(stdout);
+                    return S_OK;
+                }
+
+                Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
+                if (SUCCEEDED(g_state.settings_webview->get_Settings(&settings)) && settings != nullptr)
+                {
+                    settings->put_IsScriptEnabled(TRUE);
+                    settings->put_IsWebMessageEnabled(TRUE);
+                    settings->put_AreDefaultContextMenusEnabled(FALSE);
+                    settings->put_AreDevToolsEnabled(FALSE);
+                    settings->put_IsStatusBarEnabled(FALSE);
+                }
+
+                const std::wstring settings_url = BuildFileUriFromPath(g_state.settings_html_path);
+                g_state.settings_webview->Navigate(settings_url.c_str());
+                ResizeSettingsWebViewBounds();
+                g_state.settings_controller->put_IsVisible(TRUE);
+                g_state.settings_webview_ready = true;
+                return S_OK;
+            })
+            .Get());
+
+    if (FAILED(hr))
+    {
+        g_state.settings_webview_creating = false;
+        printf("[SETTINGS] Failed to start WebView2 creation: 0x%08lx\n", static_cast<unsigned long>(hr));
+        fflush(stdout);
+    }
+}
+
+void OpenSettingsWindow(HINSTANCE instance)
+{
+    if (!CreateSettingsWindow(instance))
+    {
+        return;
+    }
+
+    ShowSettingsWindow();
+    if (!g_state.settings_webview_ready)
+    {
+        CreateSettingsWebViewIfNeeded();
+    }
+}
+
 void RequestShowTrayMenu()
 {
     POINT cursor{};
@@ -537,6 +823,15 @@ bool InitializeTrayUi(HINSTANCE instance, const TrayMenuConfig &config)
     g_state.current_height = config.default_height * scale;
 
     g_state.tray_menu_html_path = config.tray_menu_html_path.empty() ? GetDefaultTrayMenuHtmlPath(config.app_name) : config.tray_menu_html_path;
+    g_state.settings_html_path = GetDefaultSettingsHtmlPath(config.app_name);
+    if (!IsFilePathValid(g_state.settings_html_path))
+    {
+        const std::wstring fallback_settings_path = GetFallbackSettingsHtmlPath(config.app_name);
+        if (IsFilePathValid(fallback_settings_path))
+        {
+            g_state.settings_html_path = fallback_settings_path;
+        }
+    }
     if (g_state.tray_menu_html_path.empty())
     {
         printf("[TRAY] tray_menu.html path is empty.\n");
@@ -615,6 +910,7 @@ bool InitializeTrayUi(HINSTANCE instance, const TrayMenuConfig &config)
 void ShutdownTrayUi(HINSTANCE instance)
 {
     HideTrayMenuWindow();
+    HideSettingsWindow();
 
     if (g_state.notify_icon_added)
     {
@@ -624,12 +920,19 @@ void ShutdownTrayUi(HINSTANCE instance)
 
     g_state.webview = nullptr;
     g_state.controller = nullptr;
+    g_state.settings_webview = nullptr;
+    g_state.settings_controller = nullptr;
     g_state.environment = nullptr;
 
     if (g_state.tray_menu_window != nullptr)
     {
         DestroyWindow(g_state.tray_menu_window);
         g_state.tray_menu_window = nullptr;
+    }
+    if (g_state.settings_window != nullptr)
+    {
+        DestroyWindow(g_state.settings_window);
+        g_state.settings_window = nullptr;
     }
     if (g_state.tray_window != nullptr)
     {
@@ -644,6 +947,7 @@ void ShutdownTrayUi(HINSTANCE instance)
     }
 
     UnregisterClassW(k_tray_menu_window_class, instance);
+    UnregisterClassW(k_settings_window_class, instance);
     UnregisterClassW(k_tray_window_class, instance);
 }
 } // namespace window_webview2
