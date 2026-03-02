@@ -1,4 +1,4 @@
-# Metasequoia Voice Input
+# Metasequoia Voice Input(水杉记言)
 
 This is a voice input module for [MetasequoiaIME](https://github.com/fanlumaster/MetasequoiaIME). However, it can be used as a standalone voice input tool for any application without other MetasequoiaIME components.
 
@@ -45,8 +45,20 @@ endpoint = "https://api.siliconflow.cn/v1/chat/completions"
 # 偏好语言
 language = "zh-cn"
 # 上屏前是否要先进行文本润色
-polish_text = true
+polish_text = false
+# 触发时是否播放提示音
+notification_sound = true
+# 可以选择的值有：local_whisper, cloud_siliconflow
+stt_provider = "cloud_siliconflow"
 ```
+
+You can also change these config in settings window:
+
+![](https://i.imgur.com/Q3Jct2Z.png)
+
+![](https://i.imgur.com/9j2IV9X.png)
+
+![](https://i.imgur.com/1F47neV.png)
 
 ## License
 
