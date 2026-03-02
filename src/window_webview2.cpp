@@ -251,6 +251,48 @@ void ShowTrayMenuWindowAt(POINT anchor)
     }
 }
 
+void CenterSettingsWindow()
+{
+    if (g_state.settings_window == nullptr)
+    {
+        return;
+    }
+
+    RECT window_rect{};
+    if (!GetWindowRect(g_state.settings_window, &window_rect))
+    {
+        return;
+    }
+
+    int window_width = window_rect.right - window_rect.left;
+    int window_height = window_rect.bottom - window_rect.top;
+    if (window_width <= 0 || window_height <= 0)
+    {
+        return;
+    }
+
+    POINT cursor_pos{};
+    GetCursorPos(&cursor_pos);
+
+    RECT work_area{};
+    MONITORINFO monitor_info{};
+    monitor_info.cbSize = sizeof(monitor_info);
+    const HMONITOR monitor = MonitorFromPoint(cursor_pos, MONITOR_DEFAULTTONEAREST);
+    if (monitor != nullptr && GetMonitorInfoW(monitor, &monitor_info))
+    {
+        work_area = monitor_info.rcWork;
+    }
+    else
+    {
+        SystemParametersInfoW(SPI_GETWORKAREA, 0, &work_area, 0);
+    }
+
+    const int x = work_area.left + ((work_area.right - work_area.left) - window_width) / 2;
+    const int y = work_area.top + ((work_area.bottom - work_area.top) - window_height) / 2;
+
+    SetWindowPos(g_state.settings_window, HWND_TOP, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 void ShowSettingsWindow()
 {
     if (g_state.settings_window == nullptr)
@@ -258,6 +300,7 @@ void ShowSettingsWindow()
         return;
     }
 
+    CenterSettingsWindow();
     ShowWindow(g_state.settings_window, SW_SHOW);
     SetForegroundWindow(g_state.settings_window);
 
