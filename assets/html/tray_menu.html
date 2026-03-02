@@ -79,6 +79,13 @@
       window.chrome.webview.postMessage("open_settings");
     });
 
+    // 关于：向 C++ 端发送消息，打开设置并切到关于页面
+    const about = document.getElementById('about');
+    about.addEventListener('click', () => {
+      console.log("about");
+      window.chrome.webview.postMessage("open_about");
+    });
+
     // 退出：向 C++ 端发送消息，退出程序
     const exit = document.getElementById('exit');
     exit.addEventListener('click', () => {

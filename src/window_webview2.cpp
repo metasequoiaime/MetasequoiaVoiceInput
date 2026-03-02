@@ -53,6 +53,7 @@ struct TrayUiState
     bool settings_webview_creating = false;
     bool settings_webview_ready = false;
     std::wstring settings_html_path;
+    std::wstring pending_settings_page;
 
     bool pending_show = false;
     POINT pending_show_point{};
@@ -67,6 +68,35 @@ struct TrayUiState
 TrayUiState g_state;
 
 void OpenSettingsWindow(HINSTANCE instance);
+
+void ApplyPendingSettingsPageIfNeeded()
+{
+    if (g_state.pending_settings_page.empty() || g_state.settings_webview == nullptr)
+    {
+        return;
+    }
+
+    const wchar_t *script = LR"JS(
+(() => {
+  const page = "__TARGET_PAGE__";
+  const selector = `.nav-item[data-target="${page}"]`;
+  const item = document.querySelector(selector);
+  if (item) {
+    item.click();
+  }
+})();
+)JS";
+    std::wstring script_text(script);
+    const std::wstring token = L"__TARGET_PAGE__";
+    const size_t token_pos = script_text.find(token);
+    if (token_pos != std::wstring::npos)
+    {
+        script_text.replace(token_pos, token.size(), g_state.pending_settings_page);
+    }
+    g_state.settings_webview->ExecuteScript(script_text.c_str(), nullptr);
+
+    g_state.pending_settings_page.clear();
+}
 
 std::wstring GetDefaultTrayMenuHtmlPath(const std::wstring &app_name)
 {
@@ -646,6 +676,13 @@ HRESULT OnControllerCreatedCandWnd(HRESULT result, ICoreWebView2Controller *cont
                 else if (message == L"open_settings")
                 {
                     HideTrayMenuWindow();
+                    g_state.pending_settings_page = L"api-page";
+                    OpenSettingsWindow(GetModuleHandleW(nullptr));
+                }
+                else if (message == L"open_about")
+                {
+                    HideTrayMenuWindow();
+                    g_state.pending_settings_page = L"about-page";
                     OpenSettingsWindow(GetModuleHandleW(nullptr));
                 }
                 return S_OK;
@@ -786,10 +823,27 @@ void CreateSettingsWebViewIfNeeded()
                 }
 
                 const std::wstring settings_url = BuildFileUriFromPath(g_state.settings_html_path);
+                g_state.settings_webview->add_NavigationCompleted(                          //
+                    Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>( //
+                        [](ICoreWebView2 *, ICoreWebView2NavigationCompletedEventArgs *args) -> HRESULT {
+                            BOOL success = FALSE;
+                            if (args != nullptr)
+                            {
+                                args->get_IsSuccess(&success);
+                            }
+                            if (success)
+                            {
+                                ApplyPendingSettingsPageIfNeeded();
+                            }
+                            return S_OK;
+                        })
+                        .Get(),
+                    nullptr);
                 g_state.settings_webview->Navigate(settings_url.c_str());
                 ResizeSettingsWebViewBounds();
                 g_state.settings_controller->put_IsVisible(TRUE);
                 g_state.settings_webview_ready = true;
+                ApplyPendingSettingsPageIfNeeded();
                 return S_OK;
             })
             .Get());
@@ -813,7 +867,10 @@ void OpenSettingsWindow(HINSTANCE instance)
     if (!g_state.settings_webview_ready)
     {
         CreateSettingsWebViewIfNeeded();
+        return;
     }
+
+    ApplyPendingSettingsPageIfNeeded();
 }
 
 void RequestShowTrayMenu()
