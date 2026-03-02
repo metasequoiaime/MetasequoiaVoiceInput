@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>(MetasequoiaVoiceInput)Settings</title>
+  <title>(MVI)Settings</title>
   <link rel="icon" href="./imgs/app.png">
   <style>
     :root {
@@ -110,6 +110,9 @@
       padding: 20px;
       /* scrollbar-width: thin; */
       scrollbar-color: rgba(170, 170, 170, 0.35) transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     .sidebar::-webkit-scrollbar,
@@ -136,6 +139,8 @@
 
     .content-page {
       display: none;
+      width: 100%;
+      max-width: 800px;
     }
 
     .content-page.active {
@@ -368,6 +373,8 @@
       display: flex;
       gap: 10px;
       align-items: center;
+      width: 100%;
+      max-width: 800px;
     }
 
     .actions.hidden {
@@ -429,7 +436,7 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <img class="logo" src="imgs/app.png" alt="App Logo" />
-      <div class="name">水杉语音输入法</div>
+      <div class="name">水杉记言</div>
     </div>
 
     <div class="nav-item active" data-target="api-page">🔌 API 配置</div>
