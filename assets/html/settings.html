@@ -183,6 +183,44 @@
       line-height: 1.7;
     }
 
+    .about-link-row {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .about-link-label {
+      color: var(--subtext-color);
+      font-size: 13px;
+    }
+
+    .about-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.04);
+      color: #e8e4ff;
+      font-size: 13px;
+      text-decoration: none;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+    }
+
+    .about-link:hover {
+      background: rgba(142, 140, 216, 0.2);
+      border-color: rgba(142, 140, 216, 0.55);
+      transform: translateY(-1px);
+    }
+
+    .about-link:focus-visible {
+      outline: 2px solid rgba(142, 140, 216, 0.55);
+      outline-offset: 2px;
+    }
+
     .field {
       display: grid;
       gap: 6px;
@@ -551,14 +589,24 @@
       <div class="section">
         <h2 class="section-title">项目简介</h2>
         <p class="about-text">
-          Metasequoia Voice Input 是一个面向中文输入场景的语音输入工具。
-          该项目通过语音识别（ASR）将语音实时转换为文本，并可选接入文本润色能力，
-          帮助你以更自然、更高效的方式完成输入。
+          <span>水杉记言</span>(Metasequoia Voice
+          Input)是一个面向中文输入场景的开源语音输入工具，源代码在 GitHub 上可查看。本项目通过语音识别(ASR)将语音实时转换为文本，并可选接入文本润色能力，帮助你以更自然、更高效的方式完成输入。
         </p>
-        <p class="about-meta">
-          当前设置窗口用于管理 ASR API、润色 API 和基础行为配置。<br />
-          您可以在“API 配置”和“基础设置”中修改参数，并通过“保存设置”提交到宿主程序。
+        <br>
+        <p class="about-text">
+          当前设置窗口用于管理 ASR API、润色 API 和基础行为配置。您可以在“API 配置”和“基础设置”中修改参数，并通过“保存设置”提交到宿主程序。
         </p>
+        <br>
+        <div class="about-link-row">
+          <span class="about-link-label">GitHub:</span>
+          <a class="about-link" href="https://github.com/fanlumaster/MetasequoiaVoiceInput" target="_blank"
+            rel="noopener noreferrer">MetasequoiaVoiceInput ↗</a>
+        </div>
+        <div class="about-link-row">
+          <span class="about-link-label">作者的更多作品，Windows 文字输入法：</span>
+          <a class="about-link" href="https://github.com/fanlumaster/MetasequoiaImeTsf" target="_blank"
+            rel="noopener noreferrer">水杉输入法 ↗</a>
+        </div>
       </div>
     </section>
 
