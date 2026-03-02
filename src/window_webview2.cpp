@@ -602,7 +602,7 @@ bool EnsureWebView2Loader()
     return true;
 }
 
-HRESULT OnControllerCreatedCandWnd(HRESULT result, ICoreWebView2Controller *controller)
+HRESULT OnControllerCreatedTrayMenuWnd(HRESULT result, ICoreWebView2Controller *controller)
 {
     if (FAILED(result) || controller == nullptr)
     {
@@ -733,7 +733,9 @@ HRESULT OnEnvironmentCreated(HRESULT result, ICoreWebView2Environment *environme
     return g_state.environment->CreateCoreWebView2Controller(                                //
         g_state.tray_menu_window,                                                            //
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>( //
-            [](HRESULT controller_result, ICoreWebView2Controller *controller) -> HRESULT { return OnControllerCreatedCandWnd(controller_result, controller); })
+            [](HRESULT controller_result, ICoreWebView2Controller *controller) -> HRESULT {  //
+                return OnControllerCreatedTrayMenuWnd(controller_result, controller);        //
+            })
             .Get());
 }
 
@@ -794,7 +796,7 @@ void CreateSettingsWebViewIfNeeded()
     const HRESULT hr = g_state.environment->CreateCoreWebView2Controller(                    //
         g_state.settings_window,                                                             //
         Microsoft::WRL::Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>( //
-            [](HRESULT controller_result, ICoreWebView2Controller *controller) -> HRESULT {
+            [](HRESULT controller_result, ICoreWebView2Controller *controller) -> HRESULT {  //
                 g_state.settings_webview_creating = false;
                 if (FAILED(controller_result) || controller == nullptr)
                 {
@@ -820,6 +822,14 @@ void CreateSettingsWebViewIfNeeded()
                     settings->put_AreDefaultContextMenusEnabled(FALSE);
                     settings->put_AreDevToolsEnabled(FALSE);
                     settings->put_IsStatusBarEnabled(FALSE);
+                }
+
+                Microsoft::WRL::ComPtr<ICoreWebView2Controller2> webviewController2SettingsWnd;
+                // Set transparent background
+                if (SUCCEEDED(controller->QueryInterface(IID_PPV_ARGS(&webviewController2SettingsWnd))))
+                {
+                    COREWEBVIEW2_COLOR backgroundColor = {0, 0, 0, 0};
+                    webviewController2SettingsWnd->put_DefaultBackgroundColor(backgroundColor);
                 }
 
                 const std::wstring settings_url = BuildFileUriFromPath(g_state.settings_html_path);
