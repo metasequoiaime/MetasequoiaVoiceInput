@@ -832,6 +832,29 @@ void CreateSettingsWebViewIfNeeded()
                     webviewController2SettingsWnd->put_DefaultBackgroundColor(backgroundColor);
                 }
 
+                g_state.settings_webview->add_NewWindowRequested(                                        //
+                    Microsoft::WRL::Callback<ICoreWebView2NewWindowRequestedEventHandler>(               //
+                        [](ICoreWebView2 *, ICoreWebView2NewWindowRequestedEventArgs *args) -> HRESULT { //
+                            if (args == nullptr)
+                            {
+                                return S_OK;
+                            }
+
+                            LPWSTR raw_uri = nullptr;
+                            if (FAILED(args->get_Uri(&raw_uri)) || raw_uri == nullptr)
+                            {
+                                args->put_Handled(TRUE);
+                                return S_OK;
+                            }
+
+                            ShellExecuteW(nullptr, L"open", raw_uri, nullptr, nullptr, SW_SHOWNORMAL);
+                            CoTaskMemFree(raw_uri);
+                            args->put_Handled(TRUE);
+                            return S_OK;
+                        })
+                        .Get(),
+                    nullptr);
+
                 const std::wstring settings_url = BuildFileUriFromPath(g_state.settings_html_path);
                 g_state.settings_webview->add_NavigationCompleted(                          //
                     Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>( //
