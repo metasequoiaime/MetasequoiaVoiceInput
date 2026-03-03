@@ -70,6 +70,10 @@ You can also change these config in settings window:
 
 ![](https://i.imgur.com/1F47neV.png)
 
+## Notice
+
+- Only implemented dark-mode UI now
+
 ## License
 
 GPL-3.0.
