@@ -1,5 +1,7 @@
 # Metasequoia Voice Input(水杉记言)
 
+English | [简体中文](README.zh-CN.md)
+
 This is a voice input module for [MetasequoiaIME](https://github.com/fanlumaster/MetasequoiaIME). However, it can be used as a standalone voice input tool for any application without other MetasequoiaIME components.
 
 ## How to run
@@ -20,6 +22,12 @@ Then, run `MetasequoiaVoiceInput.exe`.
 ## Configuration
 
 Edit `$env:LOCALAPPDATA\MetasequoiaVoiceInput\config.toml` (create if not exists) to configure the application.
+
+e.g. in my system, the path is:
+
+```
+C:\Users\sonnycalcr\AppData\Local\MetasequoiaVoiceInput\config.toml
+```
 
 Below is a template:
 
