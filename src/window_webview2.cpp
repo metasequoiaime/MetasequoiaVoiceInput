@@ -20,6 +20,7 @@ namespace
 constexpr UINT WM_APP_TRAY_ICON = WM_APP + 120;
 constexpr UINT WM_APP_TRAY_SHOW_MENU = WM_APP + 121;
 constexpr UINT WM_APP_TRAY_RESIZE_TO_MENU = WM_APP + 122;
+constexpr UINT WM_APP_TRAY_HIDE_MENU = WM_APP + 123;
 constexpr UINT k_tray_icon_id = 1;
 constexpr wchar_t k_tray_window_class[] = L"MetasequoiaVoiceInput.TrayWindow";
 constexpr wchar_t k_tray_menu_window_class[] = L"MetasequoiaVoiceInput.TrayMenuWindow";
@@ -58,6 +59,7 @@ struct TrayUiState
     bool pending_show = false;
     POINT pending_show_point{};
     POINT last_anchor_pos{};
+    HHOOK tray_menu_mouse_hook = nullptr;
 
     std::wstring tray_menu_html_path;
     std::wstring tray_menu_html_content;
@@ -68,6 +70,33 @@ struct TrayUiState
 TrayUiState g_state;
 
 void OpenSettingsWindow(HINSTANCE instance);
+LRESULT CALLBACK TrayMenuMouseHookProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+void StartTrayMenuOutsideClickHook()
+{
+    if (g_state.tray_menu_mouse_hook != nullptr)
+    {
+        return;
+    }
+
+    g_state.tray_menu_mouse_hook = SetWindowsHookExW(WH_MOUSE_LL, TrayMenuMouseHookProc, GetModuleHandleW(nullptr), 0);
+    if (g_state.tray_menu_mouse_hook == nullptr)
+    {
+        printf("[TRAY] Failed to install mouse hook: %lu\n", GetLastError());
+        fflush(stdout);
+    }
+}
+
+void StopTrayMenuOutsideClickHook()
+{
+    if (g_state.tray_menu_mouse_hook == nullptr)
+    {
+        return;
+    }
+
+    UnhookWindowsHookEx(g_state.tray_menu_mouse_hook);
+    g_state.tray_menu_mouse_hook = nullptr;
+}
 
 void ApplyPendingSettingsPageIfNeeded()
 {
@@ -207,6 +236,8 @@ void ResizeSettingsWebViewBounds()
 
 void HideTrayMenuWindow()
 {
+    StopTrayMenuOutsideClickHook();
+
     if (g_state.controller != nullptr)
     {
         g_state.controller->put_IsVisible(FALSE);
@@ -273,12 +304,44 @@ void ShowTrayMenuWindowAt(POINT anchor)
     SetWindowPos(g_state.tray_menu_window, HWND_TOPMOST, x, y, g_state.current_width, g_state.current_height, SWP_SHOWWINDOW);
     ShowWindow(g_state.tray_menu_window, SW_SHOWNOACTIVATE);
     SetForegroundWindow(g_state.tray_menu_window);
+    StartTrayMenuOutsideClickHook();
 
     if (g_state.controller != nullptr)
     {
         ResizeWebViewBounds();
         g_state.controller->put_IsVisible(TRUE);
     }
+}
+
+LRESULT CALLBACK TrayMenuMouseHookProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    if (nCode >= 0 && g_state.tray_menu_window != nullptr && IsWindowVisible(g_state.tray_menu_window))
+    {
+        switch (wParam)
+        {
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_NCLBUTTONDOWN:
+        case WM_NCRBUTTONDOWN:
+        case WM_NCMBUTTONDOWN: {
+            const auto *mouse_info = reinterpret_cast<const MSLLHOOKSTRUCT *>(lParam);
+            if (mouse_info != nullptr)
+            {
+                RECT menu_rect{};
+                if (GetWindowRect(g_state.tray_menu_window, &menu_rect) && !PtInRect(&menu_rect, mouse_info->pt))
+                {
+                    PostMessageW(g_state.tray_window, WM_APP_TRAY_HIDE_MENU, 0, 0);
+                }
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    return CallNextHookEx(g_state.tray_menu_mouse_hook, nCode, wParam, lParam);
 }
 
 void CenterSettingsWindow()
@@ -939,6 +1002,9 @@ LRESULT CALLBACK TrayWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         break;
     case WM_APP_TRAY_SHOW_MENU:
         RequestShowTrayMenu();
+        return 0;
+    case WM_APP_TRAY_HIDE_MENU:
+        HideTrayMenuWindow();
         return 0;
     default:
         break;
