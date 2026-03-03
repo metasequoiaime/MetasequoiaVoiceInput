@@ -1,4 +1,5 @@
 #include "window_webview2.h"
+#include "mvi_config.h"
 #include "mvi_utils.h"
 #include "resource/resource.h"
 #include <algorithm>
@@ -6,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <intsafe.h>
+#include <nlohmann/json.hpp>
 #include <shellapi.h>
 #include <WebView2.h>
 #include <winuser.h>
@@ -71,6 +73,52 @@ TrayUiState g_state;
 
 void OpenSettingsWindow(HINSTANCE instance);
 LRESULT CALLBACK TrayMenuMouseHookProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+std::string WideToUtf8(const std::wstring &wstr)
+{
+    if (wstr.empty())
+    {
+        return "";
+    }
+
+    const int required_size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
+    if (required_size <= 0)
+    {
+        return "";
+    }
+
+    std::string result(required_size, '\0');
+    const int converted = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), result.data(), required_size, nullptr, nullptr);
+    if (converted <= 0)
+    {
+        return "";
+    }
+    return result;
+}
+
+void SendSettingsConfigToWebView()
+{
+    if (g_state.settings_webview == nullptr)
+    {
+        return;
+    }
+
+    const std::string config_json = mvi_config::ReadConfigAsJson();
+    const std::wstring script = L"window.__applyHostConfig && window.__applyHostConfig(" + mvi_utils::utf8_to_wstring(config_json) + L");";
+    g_state.settings_webview->ExecuteScript(script.c_str(), nullptr);
+}
+
+void SendSettingsSaveResultToWebView(bool success, const std::string &message)
+{
+    if (g_state.settings_webview == nullptr)
+    {
+        return;
+    }
+
+    const nlohmann::json payload = {{"success", success}, {"message", message}};
+    const std::wstring script = L"window.__onHostSaveResult && window.__onHostSaveResult(" + mvi_utils::utf8_to_wstring(payload.dump()) + L");";
+    g_state.settings_webview->ExecuteScript(script.c_str(), nullptr);
+}
 
 void StartTrayMenuOutsideClickHook()
 {
@@ -896,6 +944,68 @@ void CreateSettingsWebViewIfNeeded()
                     settings->put_IsStatusBarEnabled(FALSE);
                 }
 
+                g_state.settings_webview->add_WebMessageReceived(                                        //
+                    Microsoft::WRL::Callback<ICoreWebView2WebMessageReceivedEventHandler>(               //
+                        [](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *args) -> HRESULT { //
+                            if (args == nullptr)
+                            {
+                                return S_OK;
+                            }
+
+                            LPWSTR raw_message_json = nullptr;
+                            if (FAILED(args->get_WebMessageAsJson(&raw_message_json)) || raw_message_json == nullptr)
+                            {
+                                return S_OK;
+                            }
+
+                            const std::wstring message_wide(raw_message_json);
+                            CoTaskMemFree(raw_message_json);
+
+                            try
+                            {
+                                const nlohmann::json message = nlohmann::json::parse(WideToUtf8(message_wide));
+                                if (!message.is_object())
+                                {
+                                    return S_OK;
+                                }
+
+                                const std::string action = message.value("action", "");
+                                if (action == "load_settings")
+                                {
+                                    SendSettingsConfigToWebView();
+                                    return S_OK;
+                                }
+
+                                if (action == "save_settings")
+                                {
+                                    if (!message.contains("config") || !message["config"].is_object())
+                                    {
+                                        SendSettingsSaveResultToWebView(false, "保存失败: 配置格式无效");
+                                        return S_OK;
+                                    }
+
+                                    std::string error_message;
+                                    const bool ok = mvi_config::WriteConfigFromJson(message["config"].dump(), &error_message);
+                                    if (!ok)
+                                    {
+                                        const std::string msg = error_message.empty() ? "保存失败: 未知错误" : "保存失败: " + error_message;
+                                        SendSettingsSaveResultToWebView(false, msg);
+                                        return S_OK;
+                                    }
+
+                                    SendSettingsSaveResultToWebView(true, "设置已保存到 config.toml");
+                                    SendSettingsConfigToWebView();
+                                }
+                            }
+                            catch (const std::exception &e)
+                            {
+                                SendSettingsSaveResultToWebView(false, std::string("保存失败: ") + e.what());
+                            }
+                            return S_OK;
+                        })
+                        .Get(),
+                    nullptr);
+
                 Microsoft::WRL::ComPtr<ICoreWebView2Controller2> webviewController2SettingsWnd;
                 // Set transparent background
                 if (SUCCEEDED(controller->QueryInterface(IID_PPV_ARGS(&webviewController2SettingsWnd))))
@@ -938,6 +1048,7 @@ void CreateSettingsWebViewIfNeeded()
                             }
                             if (success)
                             {
+                                SendSettingsConfigToWebView();
                                 ApplyPendingSettingsPageIfNeeded();
                             }
                             return S_OK;
@@ -975,6 +1086,7 @@ void OpenSettingsWindow(HINSTANCE instance)
         return;
     }
 
+    SendSettingsConfigToWebView();
     ApplyPendingSettingsPageIfNeeded();
 }
 

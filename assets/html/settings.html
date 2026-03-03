@@ -648,6 +648,32 @@
       }
     }
 
+    function mergeConfigWithDefaults(config) {
+      const safe = config && typeof config === "object" ? config : {};
+      const asr = safe.asr_api && typeof safe.asr_api === "object" ? safe.asr_api : {};
+      const polish = safe.polish_api && typeof safe.polish_api === "object" ? safe.polish_api : {};
+      const settings = safe.settings && typeof safe.settings === "object" ? safe.settings : {};
+
+      return {
+        asr_api: {
+          provider: typeof asr.provider === "string" ? asr.provider : defaultConfig.asr_api.provider,
+          token: typeof asr.token === "string" ? asr.token : defaultConfig.asr_api.token,
+          endpoint: typeof asr.endpoint === "string" ? asr.endpoint : defaultConfig.asr_api.endpoint
+        },
+        polish_api: {
+          provider: typeof polish.provider === "string" ? polish.provider : defaultConfig.polish_api.provider,
+          token: typeof polish.token === "string" ? polish.token : defaultConfig.polish_api.token,
+          endpoint: typeof polish.endpoint === "string" ? polish.endpoint : defaultConfig.polish_api.endpoint
+        },
+        settings: {
+          language: typeof settings.language === "string" ? settings.language : defaultConfig.settings.language,
+          polish_text: typeof settings.polish_text === "boolean" ? settings.polish_text : defaultConfig.settings.polish_text,
+          notification_sound: typeof settings.notification_sound === "boolean" ? settings.notification_sound : defaultConfig.settings.notification_sound,
+          stt_provider: typeof settings.stt_provider === "string" ? settings.stt_provider : defaultConfig.settings.stt_provider
+        }
+      };
+    }
+
     function readConfigFromForm() {
       return {
         asr_api: {
@@ -795,9 +821,10 @@
       try {
         if (window.chrome?.webview) {
           window.chrome.webview.postMessage({ action: "save_settings", config });
+        } else {
+          setStatus("当前不在宿主环境，无法写入配置文件", "err");
+          return;
         }
-        console.log("save_settings", config);
-        setStatus("已发送保存请求", "ok");
       } catch (err) {
         setStatus("保存失败: " + String(err), "err");
       }
@@ -812,11 +839,30 @@
       closeAllDropdowns();
     });
 
+    window.__applyHostConfig = (config) => {
+      const normalized = mergeConfigWithDefaults(config);
+      applyConfigToForm(normalized);
+      setStatus("已加载本地配置", "ok");
+    };
+
+    window.__onHostSaveResult = (result) => {
+      if (!result || typeof result !== "object") {
+        setStatus("保存结果无效", "err");
+        return;
+      }
+      const message = typeof result.message === "string" ? result.message : (result.success ? "设置已保存" : "保存失败");
+      setStatus(message, result.success ? "ok" : "err");
+    };
+
     initDropdown("language-dropdown");
     initDropdown("stt-provider-dropdown");
     applyConfigToForm(defaultConfig);
     updateActionsVisibility("api-page");
     moveNavIndicatorToItem(document.querySelector(".nav-item.active"));
+
+    if (window.chrome?.webview) {
+      window.chrome.webview.postMessage({ action: "load_settings" });
+    }
 
     window.addEventListener("resize", () => {
       moveNavIndicatorToItem(document.querySelector(".nav-item.active"));
