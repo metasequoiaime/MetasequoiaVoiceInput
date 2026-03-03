@@ -395,6 +395,15 @@ void ShowSettingsWindow()
 
     CenterSettingsWindow();
     ShowWindow(g_state.settings_window, SW_SHOW);
+    HWND hWnd = g_state.settings_window;
+    if (IsIconic(g_state.settings_window)) // 是否处于最小化状态
+    {
+        ShowWindow(hWnd, SW_RESTORE);
+    }
+    else
+    {
+        ShowWindow(hWnd, SW_SHOW);
+    }
     SetForegroundWindow(g_state.settings_window);
 
     if (g_state.settings_controller != nullptr)
