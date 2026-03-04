@@ -647,8 +647,19 @@ bool CreateSettingsWindow(HINSTANCE instance)
     RegisterClassW(&wc);
 
     const float scale = mvi_utils::GetForegroundWindowScale();
-    const int width = static_cast<int>(1000 * scale);
-    const int height = static_cast<int>(800 * scale);
+    int initial_width = 1000;
+    int initial_height = 800;
+    RECT mainMonitorSize = mvi_utils::GetMainMonitorCoordinates();
+    if (mainMonitorSize.right - mainMonitorSize.left < 2560)
+    {
+        initial_width = 800;
+    }
+    if (mainMonitorSize.bottom - mainMonitorSize.top < 1440)
+    {
+        initial_height = 600;
+    }
+    const int width = static_cast<int>(initial_width * scale);
+    const int height = static_cast<int>(initial_height * scale);
 
     g_state.settings_window = CreateWindowExW( //
         WS_EX_APPWINDOW,                       //
