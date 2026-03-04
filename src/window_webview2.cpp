@@ -757,6 +757,8 @@ HRESULT OnControllerCreatedTrayMenuWnd(HRESULT result, ICoreWebView2Controller *
     {
         COREWEBVIEW2_COLOR backgroundColor = {0, 0, 0, 0};
         webviewController2MenuWnd->put_DefaultBackgroundColor(backgroundColor);
+        // 初始时强制页面的缩放为 1.0
+        webviewController2MenuWnd->put_ZoomFactor(1.0);
     }
 
     Microsoft::WRL::ComPtr<ICoreWebView2Settings> settings;
@@ -767,6 +769,8 @@ HRESULT OnControllerCreatedTrayMenuWnd(HRESULT result, ICoreWebView2Controller *
         settings->put_AreDefaultContextMenusEnabled(FALSE);
         settings->put_AreDevToolsEnabled(FALSE);
         settings->put_IsStatusBarEnabled(FALSE);
+        // 禁用页面缩放
+        settings->put_IsZoomControlEnabled(FALSE);
     }
 
     g_state.webview->add_WebMessageReceived(                                   //
@@ -953,6 +957,8 @@ void CreateSettingsWebViewIfNeeded()
                     settings->put_AreDefaultContextMenusEnabled(FALSE);
                     settings->put_AreDevToolsEnabled(FALSE);
                     settings->put_IsStatusBarEnabled(FALSE);
+                    // 禁用页面缩放
+                    settings->put_IsZoomControlEnabled(FALSE);
                 }
 
                 g_state.settings_webview->add_WebMessageReceived(                                        //
@@ -1023,6 +1029,8 @@ void CreateSettingsWebViewIfNeeded()
                 {
                     COREWEBVIEW2_COLOR backgroundColor = {0, 0, 0, 0};
                     webviewController2SettingsWnd->put_DefaultBackgroundColor(backgroundColor);
+                    // 初始时强制页面的缩放为 1.0
+                    webviewController2SettingsWnd->put_ZoomFactor(1.0);
                 }
 
                 g_state.settings_webview->add_NewWindowRequested(                                        //
