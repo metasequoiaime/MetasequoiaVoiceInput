@@ -29,6 +29,8 @@ constexpr wchar_t k_tray_menu_window_class[] = L"MetasequoiaVoiceInput.TrayMenuW
 constexpr wchar_t k_settings_window_class[] = L"MetasequoiaVoiceInput.SettingsWindow";
 constexpr wchar_t k_tray_tooltip[] = L"MetasequoiaVoiceInput";
 constexpr wchar_t k_menu_size_prefix[] = L"__menu_size__:";
+constexpr int k_settings_min_width = 1200;
+constexpr int k_settings_min_height = 800;
 
 using CreateCoreWebView2EnvironmentWithOptionsFn = HRESULT(STDAPICALLTYPE *)(PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions *, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *);
 
@@ -520,6 +522,16 @@ LRESULT CALLBACK SettingsWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 {
     switch (message)
     {
+    case WM_GETMINMAXINFO: {
+        auto *min_max_info = reinterpret_cast<MINMAXINFO *>(lParam);
+        if (min_max_info != nullptr)
+        {
+            min_max_info->ptMinTrackSize.x = k_settings_min_width;
+            min_max_info->ptMinTrackSize.y = k_settings_min_height;
+            return 0;
+        }
+        break;
+    }
     case WM_SIZE:
         ResizeSettingsWebViewBounds();
         return 0;
