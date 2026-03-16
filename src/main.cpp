@@ -24,6 +24,7 @@
 #include "text_polisher.h"
 #include "window_webview2.h"
 #include <fmt/format.h>
+#include <fmt/xchar.h>
 #include <windows.h>
 
 // Configuration
@@ -194,6 +195,18 @@ LRESULT CALLBACK keyboard_hook_proc(int nCode, WPARAM wParam, LPARAM lParam)
 int main()
 {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    auto single_instance_mutex = std::unique_ptr<void, decltype(&CloseHandle)>(CreateMutexW(nullptr, TRUE, L"Local\\MetasequoiaVoiceInput_SingleInstance"), &CloseHandle);
+    if (single_instance_mutex == nullptr)
+    {
+        OutputDebugString(fmt::format(L"[mvi]: Failed to create single instance mutex.").c_str());
+        return 1;
+    }
+    if (GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        OutputDebugString(fmt::format(L"[mvi]: Single instance already exists, MetasequoiaVoiceInput is already running.").c_str());
+        return 0;
+    }
 
     const HINSTANCE app_instance = GetModuleHandleW(nullptr);
 
