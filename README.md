@@ -2,11 +2,11 @@
 
 English | [简体中文](README.zh-CN.md)
 
-This is a voice input module for [MetasequoiaIME](https://github.com/fanlumaster/MetasequoiaIME). However, it can be used as a standalone voice input tool for any application without other MetasequoiaIME components.
+This is a voice input module for [MetasequoiaImeTsf](https://github.com/metasequoiaime/MetasequoiaImeTsf). However, it can be used as a standalone voice input tool for any application without other MetasequoiaIME components.
 
 ## How to run
 
-Download release exe file from [releases](https://github.com/fanlumaster/MetasequoiaVoiceInput/releases).
+Download release exe file from [releases](https://github.com/metasequoiaime/MetasequoiaVoiceInput/releases).
 
 Then, copy all the contents of this project's `assets` folder to `$env:LOCALAPPDATA\MetasequoiaVoiceInput\`. And replace your siliconflow token in `config.toml`.
 

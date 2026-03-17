@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-水杉记言是一款语音输入模块，最初为 [MetasequoiaIME](https://github.com/fanlumaster/MetasequoiaIME) 设计，但也可以**独立运行**，作为通用语音输入工具用于任何应用程序，而无需安装其他 MetasequoiaIME 组件。
+水杉记言是一款语音输入模块，最初为 [MetasequoiaImeTsf](https://github.com/metasequoiaime/MetasequoiaImeTsf) 设计，但也可以**独立运行**，作为通用语音输入工具用于任何应用程序，而无需安装其他输入法组件。
 
 ---
 
@@ -10,7 +10,7 @@
 
 1. 从 GitHub 的 Releases 页面下载最新版本：
 
-[https://github.com/fanlumaster/MetasequoiaVoiceInput/releases](https://github.com/fanlumaster/MetasequoiaVoiceInput/releases)
+[https://github.com/metasequoiaime/MetasequoiaVoiceInput/releases](https://github.com/metasequoiaime/MetasequoiaVoiceInput/releases)
 
 2. 将本项目 `assets` 文件夹中的**所有内容**复制到：
 
